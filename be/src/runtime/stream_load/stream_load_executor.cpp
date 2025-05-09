@@ -71,11 +71,13 @@ static bool wait_txn_visible_until(const AuthInfo& auth, std::string_view db, st
 Status StreamLoadExecutor::execute_plan_fragment(StreamLoadContext* ctx) {
     StarRocksMetrics::instance()->txn_exec_plan_total.increment(1);
 // submit this params
+// 没有定义BE_TEST, 所以实际就是走到这个逻辑
 #ifndef BE_TEST
     ctx->ref();
     ctx->start_write_data_nanos = MonotonicNanos();
     LOG(INFO) << "begin to execute job. label=" << ctx->label << ", txn_id: " << ctx->txn_id
               << ", query_id=" << print_id(ctx->put_result.params.params.query_id);
+    // FragmentMgr::exec_plan_fragment
     auto st = _exec_env->fragment_mgr()->exec_plan_fragment(
             ctx->put_result.params,
             [ctx](PlanFragmentExecutor* executor) {

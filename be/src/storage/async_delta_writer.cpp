@@ -112,6 +112,7 @@ Status AsyncDeltaWriter::_init() {
         return Status::InternalError("StorageEngine::instance() is NULL");
     }
     bthread::ExecutionQueueOptions opts;
+    // number_tablet_writer_threads的线程池
     opts.executor = StorageEngine::instance()->async_delta_writer_executor();
     if (UNLIKELY(opts.executor == nullptr)) {
         return Status::InternalError("AsyncDeltaWriterExecutor init failed");

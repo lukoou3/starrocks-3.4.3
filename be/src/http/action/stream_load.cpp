@@ -150,6 +150,7 @@ static void _send_reply(HttpRequest* req, const std::string& str) {
 }
 
 void StreamLoadAction::handle(HttpRequest* req) {
+    // stream_load的handler
     auto* ctx = (StreamLoadContext*)req->handler_ctx();
     if (ctx == nullptr) {
         return;
@@ -163,6 +164,7 @@ void StreamLoadAction::handle(HttpRequest* req) {
                          << " " << ctx->brief();
         }
     }
+    // 处理时间
     ctx->load_cost_nanos = MonotonicNanos() - ctx->start_nanos;
 
     if (!ctx->status.ok() && !ctx->status.is_publish_timeout()) {
@@ -178,6 +180,7 @@ void StreamLoadAction::handle(HttpRequest* req) {
     auto str = ctx->to_json();
     _send_reply(req, str);
 
+    // stream_load的statstics
     // update statstics
     streaming_load_requests_total.increment(1);
     streaming_load_duration_ms.increment(ctx->load_cost_nanos / 1000000);
@@ -226,6 +229,7 @@ Status StreamLoadAction::_handle_batch_write(starrocks::HttpRequest* http_req, S
 int StreamLoadAction::on_header(HttpRequest* req) {
     streaming_load_current_processing.increment(1);
 
+    // 处理stream_load
     auto* ctx = new StreamLoadContext(_exec_env);
     ctx->ref();
     req->set_handler_ctx(ctx);
@@ -258,6 +262,7 @@ int StreamLoadAction::on_header(HttpRequest* req) {
         LOG(INFO) << "streaming load request: " << req->debug_string();
     }
 
+    // 处理stream_load
     auto st = _on_header(req, ctx);
     if (!st.ok()) {
         ctx->status = st;
@@ -276,7 +281,9 @@ int StreamLoadAction::on_header(HttpRequest* req) {
     return 0;
 }
 
+// 处理stream_load
 Status StreamLoadAction::_on_header(HttpRequest* http_req, StreamLoadContext* ctx) {
+    // 认证
     // auth information
     if (!parse_basic_auth(*http_req, &ctx->auth)) {
         LOG(WARNING) << "parse basic authorization failed." << ctx->brief();
@@ -293,6 +300,7 @@ Status StreamLoadAction::_on_header(HttpRequest* http_req, StreamLoadContext* ct
         }
     }
 
+    // 检查大小
     // check content length
     ctx->body_bytes = 0;
     size_t max_body_bytes = config::streaming_load_max_mb * 1024 * 1024;
@@ -345,6 +353,7 @@ Status StreamLoadAction::_on_header(HttpRequest* http_req, StreamLoadContext* ct
         }
     }
 
+    // header可以设置timeout
     if (!http_req->header(HTTP_TIMEOUT).empty()) {
         StringParser::ParseResult parse_result = StringParser::PARSE_SUCCESS;
         const auto& timeout = http_req->header(HTTP_TIMEOUT);
@@ -364,6 +373,7 @@ Status StreamLoadAction::_on_header(HttpRequest* http_req, StreamLoadContext* ct
     int64_t begin_txn_start_time = MonotonicNanos();
     RETURN_IF_ERROR(_exec_env->stream_load_executor()->begin_txn(ctx));
     ctx->begin_txn_cost_nanos = MonotonicNanos() - begin_txn_start_time;
+    // 真正处理stream_load, 处理put文件
     // process put file
     return _process_put(http_req, ctx);
 }
@@ -450,7 +460,9 @@ void StreamLoadAction::free_handler_ctx(void* param) {
     }
 }
 
+// 真正处理stream_load, 处理put文件
 Status StreamLoadAction::_process_put(HttpRequest* http_req, StreamLoadContext* ctx) {
+    // json/csv/压缩的csv使用stream
     // Now we use stream
     ctx->use_streaming = is_format_support_streaming(ctx->format);
 
@@ -640,6 +652,7 @@ Status StreamLoadAction::_process_put(HttpRequest* http_req, StreamLoadContext* 
         request.__set_payload_compression_type(http_req->header(HTTP_COMPRESSION));
     }
 
+    // 这里访问前端: com.starrocks.service.FrontendServiceImpl#streamLoadPutImpl
     // plan this load
     int64_t stream_load_put_start_time = MonotonicNanos();
     RETURN_IF_ERROR(stream_load_put_internal(request, rpc_timeout_ms, &ctx->put_result));

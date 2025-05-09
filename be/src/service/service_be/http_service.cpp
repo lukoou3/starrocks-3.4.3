@@ -91,6 +91,7 @@ void HttpServiceBE::join() {
 Status HttpServiceBE::start() {
     add_default_path_handlers(_web_page_handler.get(), GlobalEnv::GetInstance()->process_mem_tracker());
 
+    // stream_load的api
     // register load
     auto* stream_load_action = new StreamLoadAction(_env, _http_concurrent_limiter.get());
     _ev_http_server->register_handler(HttpMethod::PUT, "/api/{db}/{table}/_stream_load", stream_load_action);

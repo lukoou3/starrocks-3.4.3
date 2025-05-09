@@ -198,6 +198,7 @@ Status FragmentExecState::execute() {
     int64_t duration_ns = 0;
     {
         SCOPED_RAW_TIMER(&duration_ns);
+        // PlanFragmentExecutor _executor;
         WARN_IF_ERROR(_executor.open(),
                       strings::Substitute("Fail to open fragment $0", print_id(_fragment_instance_id)));
         _executor.close();
@@ -373,6 +374,7 @@ void FragmentMgr::exec_actual(const std::shared_ptr<FragmentExecState>& exec_sta
     MemTracker* prev_tracker = tls_thread_status.set_mem_tracker(s_tracker.get());
     DeferOp op([&] { tls_thread_status.set_mem_tracker(prev_tracker); });
 
+    // FragmentExecState::execute()
     WARN_IF_ERROR(exec_state->execute(),
                   strings::Substitute("Fail to execute fragment $0", print_id(exec_state->fragment_instance_id())));
 
@@ -402,6 +404,7 @@ Status FragmentMgr::exec_plan_fragment(const TExecPlanFragmentParams& params, co
             params, [](auto&& PH1) { return empty_function(std::forward<decltype(PH1)>(PH1)); }, cb);
 }
 
+// load似乎就是走的这里
 Status FragmentMgr::exec_plan_fragment(const TExecPlanFragmentParams& params, const StartSuccCallback& start_cb,
                                        const FinishCallback& cb) {
     RETURN_IF_ERROR(
@@ -436,6 +439,7 @@ Status FragmentMgr::exec_plan_fragment(const TExecPlanFragmentParams& params, co
         _fragment_map.insert(std::make_pair(fragment_instance_id, exec_state));
     }
 
+    // 提交到线程
     auto st = _thread_pool->submit_func([this, exec_state, cb] { exec_actual(exec_state, cb); });
     if (!st.ok()) {
         exec_state->cancel(PPlanFragmentCancelReason::INTERNAL_ERROR);

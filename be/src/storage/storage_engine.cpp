@@ -233,6 +233,7 @@ Status StorageEngine::_open(const EngineOptions& options) {
                             .set_idle_timeout(MonoDelta::FromMilliseconds(/*5 minutes=*/5 * 60 * 1000))
                             .build(&thread_pool));
 
+    // number_tablet_writer_threads的线程池
     _async_delta_writer_executor =
             std::make_unique<bthreads::ThreadPoolExecutor>(thread_pool.release(), kTakesOwnership);
     REGISTER_THREAD_POOL_METRICS(

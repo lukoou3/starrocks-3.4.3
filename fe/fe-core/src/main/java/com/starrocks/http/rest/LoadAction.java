@@ -79,6 +79,7 @@ public class LoadAction extends RestBaseAction {
     }
 
     public static void registerAction(ActionController controller) throws IllegalArgException {
+        // stream_load的api
         controller.registerHandler(HttpMethod.PUT,
                 "/api/{" + DB_KEY + "}/{" + TABLE_KEY + "}/_stream_load",
                 new LoadAction(controller));
@@ -117,6 +118,7 @@ public class LoadAction extends RestBaseAction {
     @Override
     public void executeWithoutPassword(BaseRequest request, BaseResponse response) throws DdlException, AccessDeniedException {
         try {
+            // stream_load的handler
             executeWithoutPasswordInternal(request, response);
         } catch (DdlException e) {
             TransactionResult resp = new TransactionResult();
@@ -146,7 +148,7 @@ public class LoadAction extends RestBaseAction {
 
     public void executeWithoutPasswordInternal(BaseRequest request, BaseResponse response) throws DdlException,
             AccessDeniedException {
-
+        // 必须设置100-continue header
         // A 'Load' request must have "Expect: 100-continue" header for HTTP/1.1 and onward.
         // Skip the "Expect" header check for HTTP/1.0 and earlier versions.
         if (isExpectHeaderValid(request.getRequest()) && !HttpUtil.is100ContinueExpected(request.getRequest())) {
@@ -158,6 +160,7 @@ public class LoadAction extends RestBaseAction {
         // affect subsequent requests processing.
         response.setForceCloseConnection(true);
 
+        // 设置enable_merge_commit启用BatchWrite
         boolean enableBatchWrite = "true".equalsIgnoreCase(
                 request.getRequest().headers().get(StreamLoadHttpHeader.HTTP_ENABLE_BATCH_WRITE));
         if (enableBatchWrite && redirectToLeader(request, response)) {
@@ -178,8 +181,10 @@ public class LoadAction extends RestBaseAction {
                 dbName, tableName, PrivilegeType.INSERT);
 
         if (!enableBatchWrite) {
+            // 处理普通StreamLoad
             processNormalStreamLoad(request, response, dbName, tableName);
         } else {
+            // 处理BatchWrite
             processBatchWriteStreamLoad(request, response, dbName, tableName);
         }
     }
@@ -193,6 +198,7 @@ public class LoadAction extends RestBaseAction {
             warehouseName = request.getRequest().headers().get(WAREHOUSE_KEY);
         }
 
+        // 选择一个backend
         List<Long> nodeIds = LoadAction.selectNodes(warehouseName);
 
         // TODO: need to refactor after be split into cn + dn
@@ -203,6 +209,7 @@ public class LoadAction extends RestBaseAction {
 
         TNetworkAddress redirectAddr = new TNetworkAddress(node.getHost(), node.getHttpPort());
 
+        // 直接重定向http请求，url和参数是完全一样的
         LOG.info("redirect load action to destination={}, db: {}, tbl: {}, label: {}, warehouse: {}",
                 redirectAddr.toString(), dbName, tableName, label, warehouseName);
         redirectTo(request, response, redirectAddr);
