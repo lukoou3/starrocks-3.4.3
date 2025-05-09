@@ -499,6 +499,7 @@ public class OlapTableSink extends DataSink {
         if (physicalPartition.isImmutable()) {
             return true;
         }
+        // 什么时候会跳过
         if (automaticBucketSize > 0 && physicalPartition.getTabletMaxDataSize() > automaticBucketSize) {
             physicalPartition.setImmutable(true);
             return true;

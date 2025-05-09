@@ -1569,6 +1569,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
                 createLakeTablets(olapTable, id, index.getShardGroupId(), index, distributionInfo,
                         tabletMeta, tabletIdSet, warehouseId);
             } else {
+                // 创建
                 createOlapTablets(olapTable, index, Replica.ReplicaState.NORMAL, distributionInfo,
                         physicalPartition.getVisibleVersion(), replicationNum, tabletMeta, tabletIdSet);
             }
@@ -1609,6 +1610,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             List<PhysicalPartition> subPartitions = new ArrayList<>();
             // create physical partition
             for (int i = 0; i < numSubPartition; i++) {
+                // 创建physical partition
                 PhysicalPartition subPartition = createPhysicalPartition(db, copiedTable, partition, warehouseId);
                 subPartitions.add(subPartition);
             }
@@ -1687,9 +1689,12 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         }
     }
 
+    // 创建分区
     Partition createPartition(Database db, OlapTable table, long partitionId, String partitionName,
                               Long version, Set<Long> tabletIdSet, long warehouseId) throws DdlException {
+        // 表distribution信息
         DistributionInfo distributionInfo = table.getDefaultDistributionInfo().copy();
+        // 推断分桶数量
         table.inferDistribution(distributionInfo);
 
         return createPartition(db, table, partitionId, partitionName, version, tabletIdSet, distributionInfo, warehouseId);
@@ -2104,10 +2109,12 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             if (chooseBackendsArbitrary) {
                 backendsPerBucketSeq = Lists.newArrayList();
             }
+            // 分桶数量
             for (int i = 0; i < distributionInfo.getBucketNum(); ++i) {
                 // create a new tablet with random chosen backends
                 LocalTablet tablet = new LocalTablet(getNextId());
 
+                // 创建Tablet
                 // add tablet to inverted index first
                 index.addTablet(tablet, tabletMeta);
                 tabletIdSet.add(tablet.getId());

@@ -51,25 +51,7 @@ import com.starrocks.authentication.AuthenticationMgr;
 import com.starrocks.authorization.AccessDeniedException;
 import com.starrocks.authorization.PrivilegeBuiltinConstants;
 import com.starrocks.authorization.PrivilegeType;
-import com.starrocks.catalog.CatalogUtils;
-import com.starrocks.catalog.Column;
-import com.starrocks.catalog.Database;
-import com.starrocks.catalog.InternalCatalog;
-import com.starrocks.catalog.ListPartitionInfo;
-import com.starrocks.catalog.LocalTablet;
-import com.starrocks.catalog.MaterializedIndex;
-import com.starrocks.catalog.MaterializedIndexMeta;
-import com.starrocks.catalog.MaterializedView;
-import com.starrocks.catalog.OlapTable;
-import com.starrocks.catalog.Partition;
-import com.starrocks.catalog.PartitionInfo;
-import com.starrocks.catalog.PartitionKey;
-import com.starrocks.catalog.PhysicalPartition;
-import com.starrocks.catalog.RangePartitionInfo;
-import com.starrocks.catalog.Replica;
-import com.starrocks.catalog.Table;
-import com.starrocks.catalog.Tablet;
-import com.starrocks.catalog.View;
+import com.starrocks.catalog.*;
 import com.starrocks.catalog.system.information.TaskRunsSystemTable;
 import com.starrocks.catalog.system.information.TasksSystemTable;
 import com.starrocks.catalog.system.sys.GrantsTo;
@@ -144,10 +126,7 @@ import com.starrocks.qe.ShowExecutor;
 import com.starrocks.qe.ShowMaterializedViewStatus;
 import com.starrocks.qe.scheduler.Coordinator;
 import com.starrocks.qe.scheduler.slot.LogicalSlot;
-import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.server.MetadataMgr;
-import com.starrocks.server.TemporaryTableMgr;
-import com.starrocks.server.WarehouseManager;
+import com.starrocks.server.*;
 import com.starrocks.sql.analyzer.AlterTableClauseAnalyzer;
 import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.sql.analyzer.Authorizer;
@@ -1948,6 +1927,16 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         return result;
     }
 
+    /**
+     * random分桶Tablet写满后创建Tablet的流程：
+     *   @see FrontendServiceImpl#updateImmutablePartition(TImmutablePartitionRequest) 收到updateImmutablePartition请求
+     *   @see LocalMetastore#addSubPartitions 调用LocalMetastore.addSubPartitions
+     *   @see LocalMetastore#createPhysicalPartition 调用LocalMetastore.createPhysicalPartition
+     *   @see LocalMetastore#createOlapTablets 创建Tablets
+     *   @see MaterializedIndex#addTablet(Tablet, TabletMeta) 创建Tablet
+     *
+     * 两种方式创建子分区分桶数的逻辑是一样的，就是打印的日志不同
+     */
     @Override
     public TImmutablePartitionResult updateImmutablePartition(TImmutablePartitionRequest request) throws TException {
         LOG.debug("Receive update immutable partition: {}", request);
@@ -2184,6 +2173,16 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
     }
 
+    /**
+     * random分桶首次创建分区的流程：
+     *   @see FrontendServiceImpl#createPartition(TCreatePartitionRequest) 收到创建分区的请求
+     *   @see LocalMetastore#addPartitions(ConnectContext, Database, String, AddPartitionClause) 调用LocalMetastore创建分区
+     *   @see LocalMetastore#createPartitionMap(Database, OlapTable, List, HashMap, Set, Set, long) 创建分区
+     *   @see LocalMetastore#createPartition(Database, OlapTable, long, String, Long, Set, long) 创建分区
+     *   @see LocalMetastore#createOlapTablets 创建Tablets
+     *   @see MaterializedIndex#addTablet(Tablet, TabletMeta) 创建Tablet
+     *
+     */
     @Override
     public TCreatePartitionResult createPartition(TCreatePartitionRequest request) throws TException {
 

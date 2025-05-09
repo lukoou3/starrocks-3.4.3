@@ -356,7 +356,9 @@ public class CatalogUtils {
         }
     }
 
+    // 初始化分桶数
     public static int divisibleBucketNum(int backendNum) {
+        // 注意这里使用循环，也就是说backendNum最大值是7
         while (backendNum > 7) {
             if (backendNum % 2 == 0) {
                 backendNum = backendNum / 2;
@@ -377,13 +379,16 @@ public class CatalogUtils {
     public static int calPhysicalPartitionBucketNum() {
         int backendNum = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendIds().size();
 
+        // 存算分离
         if (RunMode.isSharedDataMode()) {
             backendNum = backendNum + GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getAliveComputeNodeNumber();
         }
 
+        // 随机分桶的默认桶数
         return divisibleBucketNum(backendNum);
     }
 
+    // 根据backend数量计算分桶数的逻辑，不是随机分桶的计算逻辑，hash可能会使用这个逻辑
     public static int calBucketNumAccordingToBackends() {
         int backendNum = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendIds().size();
 

@@ -1331,10 +1331,17 @@ public class OlapTable extends Table {
     }
 
     /*
+     * 根据分区和集群状态推断distribution信息
      * Infer the distribution info based on partitions and cluster status
+     *
      */
     public void inferDistribution(DistributionInfo info) throws DdlException {
         if (info.getType() == DistributionInfo.DistributionInfoType.HASH) {
+            /**
+             * 如果是hash分区：
+             *    如果表配置了bucket则取表配置的bucket
+             *    如果表没有配置bucket则使用calAvgBucketNumOfRecentPartitions方法计算bucket数
+             */
             // infer bucket num
             if (info.getBucketNum() == 0) {
                 int numBucket = CatalogUtils.calAvgBucketNumOfRecentPartitions(this,
@@ -1342,11 +1349,18 @@ public class OlapTable extends Table {
                 info.setBucketNum(numBucket);
             }
         } else if (info.getType() == DistributionInfo.DistributionInfoType.RANDOM) {
+            /**
+             * 如果是random分区：
+             *    如果表配置了mutable_bucket_num属性则优先取mutable_bucket_num参数
+             *    如果表没有配置mutable_bucket_num属性，如果表配置了bucket则取表配置的bucket
+             *    如果表也没有配置bucket，使用calPhysicalPartitionBucketNum方法计算bucket数
+             */
             // prior to use user set mutable bucket num
             long numBucket = getMutableBucketNum();
             if (numBucket > 0) {
                 info.setBucketNum((int) numBucket);
             } else if (info.getBucketNum() == 0) {
+                // 计算默认RANDOM分桶数
                 numBucket = CatalogUtils.calPhysicalPartitionBucketNum();
                 info.setBucketNum((int) numBucket);
             }
