@@ -203,7 +203,7 @@ Status StreamLoadAction::_handle(StreamLoadContext* ctx) {
     } else {
         if (ctx->buffer != nullptr && ctx->buffer->pos > 0) {
             ctx->buffer->flip();
-            RETURN_IF_ERROR(ctx->body_sink->append(std::move(ctx->buffer)));
+            RETURN_IF_ERROR(ctx->body_sink->append(std::move(ctx->buffer))); // 这个append是读取添加buffer吧
             ctx->buffer = nullptr;
         }
         RETURN_IF_ERROR(ctx->body_sink->finish());
@@ -414,7 +414,7 @@ void StreamLoadAction::on_chunk_data(HttpRequest* req) {
                 // Otherwise, we could push buffer to the body_sink in streaming mode.
                 // buffer capacity is not enough, so we push the buffer to the pipe and allocate new one.
                 ctx->buffer->flip();
-                auto st = ctx->body_sink->append(std::move(ctx->buffer));
+                auto st = ctx->body_sink->append(std::move(ctx->buffer)); // 这个append是读取添加buffer吧
                 if (!st.ok()) {
                     LOG(WARNING) << "append body content failed. errmsg=" << st << " context=" << ctx->brief();
                     ctx->status = st;
@@ -480,6 +480,7 @@ Status StreamLoadAction::_process_put(HttpRequest* http_req, StreamLoadContext* 
 
     request.__set_loadId(ctx->id.to_thrift());
     if (ctx->use_streaming) {
+        // StreamLoadPipe读取数据
         auto pipe =
                 std::make_shared<StreamLoadPipe>(1024 * 1024 /* max_buffered_bytes */, 64 * 1024 /* min_chunk_size */);
         RETURN_IF_ERROR(_exec_env->load_stream_mgr()->put(ctx->id, pipe));

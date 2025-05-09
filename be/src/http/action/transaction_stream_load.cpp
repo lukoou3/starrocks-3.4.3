@@ -216,6 +216,7 @@ void TransactionStreamLoadAction::handle(HttpRequest* req) {
     // For JSON, now the buffer contains a complete json.
     if (ctx->buffer != nullptr && ctx->buffer->pos > 0) {
         ctx->buffer->flip();
+        // 这个append是读取添加buffer吧
         WARN_IF_ERROR(ctx->body_sink->append(std::move(ctx->buffer)),
                       "append MessageBodySink failed when handle TransactionStreamLoad");
         ctx->buffer = nullptr;
@@ -591,6 +592,7 @@ void TransactionStreamLoadAction::on_chunk_data(HttpRequest* req) {
                 // For non-json format, we could push buffer to the body_sink in streaming mode.
                 // buffer capacity is not enough, so we push the buffer to the pipe and allocate new one.
                 ctx->buffer->flip();
+                // 这个append是读取添加buffer吧
                 auto st = ctx->body_sink->append(std::move(ctx->buffer));
                 if (!st.ok()) {
                     LOG(WARNING) << "append body content failed. errmsg=" << st << " context=" << ctx->brief();

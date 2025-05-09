@@ -4,5 +4,6 @@
 !cmake_modules/
 !src/
 !test/
+!files/
 !CMakeLists.txt
 !extension/

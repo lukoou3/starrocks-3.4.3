@@ -1,0 +1,149 @@
+./fe/bin/start_fe.sh --daemon
+./be/bin/start_be.sh --daemon
+
+./fe/bin/stop_fe.sh
+./be/bin/stop_be.sh
+
+ps -ef | grep starrocks
+
+mysql -uroot -P9030 -h127.0.0.1
+
+gdb attach 进程ID
+info inferiors
+info threads
+thread apply all bt
+thread apply 3 bt
+q(退出)
+number_tablet_writer_threads配置的线程名称:delta_writer
+be_http_num_workers配置的线程名称:http_server
+starrocks/be/src/service/service_be/http_service.cpp
+
+pstack 进程ID
+
+bin/start.sh -t local \
+--extensions "format-json;connector-faker;connector-starrocks" \
+config/application_starrocks_batch.conf --parallelism 10
+
+-----
+stream_load_io线程的调用栈
+
+Thread 3 (Thread 0x7f2ea815b700 (LWP 11507)):
+#0  0x00007f2f76ee0a35 in pthread_cond_wait@@GLIBC_2.3.2 () from /lib64/libpthread.so.0
+#1  0x000000000c2ade3c in std::condition_variable::wait(std::unique_lock<std::mutex>&) ()
+#2  0x00000000037539d6 in starrocks::StreamLoadPipe::read() ()
+#3  0x0000000003758507 in starrocks::StreamLoadPipeReader::read() ()
+#4  0x00000000041642e8 in starrocks::JsonReader::_read_file_stream() ()
+#5  0x0000000004164b7c in starrocks::JsonReader::_read_and_parse_json() ()
+#6  0x0000000004166582 in starrocks::JsonScanner::_open_next_reader() ()
+#7  0x00000000041667a3 in starrocks::JsonScanner::get_next() ()
+#8  0x0000000006dfbbe1 in starrocks::connector::FileDataSource::get_next(starrocks::RuntimeState*, std::shared_ptr<starrocks::Chunk>*) ()
+#9  0x00000000042a6667 in starrocks::ConnectorScanNode::_scanner_thread(starrocks::ConnectorScanner*) ()
+#10 0x0000000003844393 in starrocks::ThreadPool::dispatch_thread() ()
+#11 0x000000000383cdf6 in starrocks::Thread::supervise_thread(void*) ()
+#12 0x00007f2f76edcea5 in start_thread () from /lib64/libpthread.so.0
+#13 0x00007f2f762ddb0d in clone () from /lib64/libc.so.6
+
+Thread 3 (Thread 0x7f2eaa961700 (LWP 11671)):
+#0  0x00007f2f76ee0de2 in pthread_cond_timedwait@@GLIBC_2.3.2 () from /lib64/libpthread.so.0
+#1  0x0000000003844168 in starrocks::ThreadPool::dispatch_thread() ()
+#2  0x000000000383cdf6 in starrocks::Thread::supervise_thread(void*) ()
+#3  0x00007f2f76edcea5 in start_thread () from /lib64/libpthread.so.0
+#4  0x00007f2f762ddb0d in clone () from /lib64/libc.so.6
+
+----
+
+fe.log：
+2024-12-22 23:10:43.611+08:00 INFO (nioEventLoopGroup-8-1|215) [LoadAction.executeWithoutPasswordInternal():172] redirect load action to destination=TNetworkAddress(hostname:192.168.216.86, port:8062), db: test, tbl: object_stat, label: null, warehouse: default_warehouse
+2024-12-22 23:10:43.648+08:00 INFO (thrift-server-pool-1|195) [FrontendServiceImpl.loadTxnBegin():1167] receive txn begin request, db: test, tbl: object_stat, label: 63141c9d-10bc-4629-b323-a01d56e64ffe, backend: 192.168.216.128
+2024-12-22 23:10:43.659+08:00 INFO (thrift-server-pool-1|195) [StreamLoadMgr.beginLoadTask():167] STREAM_LOAD_TASK=12006, msg={create load task}
+2024-12-22 23:10:43.660+08:00 INFO (thrift-server-pool-1|195) [DatabaseTransactionMgr.beginTransaction():188] begin transaction: txn_id: 2006 with label 63141c9d-10bc-4629-b323-a01d56e64ffe from coordinator FE: 192.168.216.86, listner id: 12006, combinedTxnLog: false
+2024-12-22 23:10:43.660+08:00 INFO (thrift-server-pool-1|195) [StreamLoadTask.beginTxn():304] stream load 63141c9d-10bc-4629-b323-a01d56e64ffe channel_id 0 begin. db: test, tbl: object_stat, txn_id: 2006
+2024-12-22 23:10:43.660+08:00 INFO (thrift-server-pool-1|195) [TxnStateCallbackFactory.addCallback():40] add callback of txn state : 12006. current callback size: 4
+2024-12-22 23:10:43.676+08:00 INFO (thrift-server-pool-0|190) [FrontendServiceImpl.streamLoadPut():1596] receive stream load put request. db:test, tbl: object_stat, txn_id: 2006, load id: 88466667-1aa3-97a2-515a-8b05301ff7bd, backend: 192.168.216.128
+2024-12-22 23:10:43.723+08:00 INFO (thrift-server-pool-0|190) [StreamLoadPlanner.plan():311] load job id: 88466667-1aa3-97a2-515a-8b05301ff7bd, txn id: 2006, parallel: 0, compress: NO_COMPRESSION, replicated: true, quorum: MAJORITY
+2024-12-22 23:10:43.723+08:00 INFO (thrift-server-pool-0|190) [DefaultCoordinator.<init>():269] Execution Profile: 88466667-1aa3-97a2-515a-8b05301ff7be
+2024-12-22 23:10:44.400+08:00 INFO (thrift-server-pool-4|212) [FrontendServiceImpl.loadTxnCommit():1278] receive txn commit request. db: test, tbl: object_stat, txn_id: 2006, backend: 192.168.216.128
+2024-12-22 23:10:44.402+08:00 INFO (thrift-server-pool-4|212) [DatabaseTransactionMgr.prepareTransaction():371] transaction:[TransactionState. txn_id: 2006, label: 63141c9d-10bc-4629-b323-a01d56e64ffe, db id: 11013, table id list: 11015, callback id: 12006, coordinator: FE: 192.168.216.86, transaction status: PREPARED, error replicas num: 0, replica ids: , prepare time: 1734880243660, write end time: 1734880244402, allow commit time: -1, commit time: -1, finish time: -1, reason:  attachment: com.starrocks.load.loadv2.ManualLoadTxnCommitAttachment@31646330 tabletCommitInfos size: 1] successfully prepare
+2024-12-22 23:10:44.404+08:00 INFO (PUBLISH_VERSION|24) [PublishVersionDaemon.publishVersionForOlapTable():283] send publish tasks for txn_id: 2006
+2024-12-22 23:10:44.404+08:00 INFO (thrift-server-pool-4|212) [QueryRuntimeProfile.finishAllInstances():249] unfinished instances: [88466667-1aa3-97a2-515a-8b05301ff7be]
+2024-12-22 23:10:44.407+08:00 INFO (thrift-server-pool-4|212) [DatabaseTransactionMgr.commitPreparedTransaction():471] transaction:[TransactionState. txn_id: 2006, label: 63141c9d-10bc-4629-b323-a01d56e64ffe, db id: 11013, table id list: 11015, callback id: 12006, coordinator: FE: 192.168.216.86, transaction status: COMMITTED, error replicas num: 0, replica ids: , prepare time: 1734880243660, write end time: 1734880244402, allow commit time: -1, commit time: 1734880244402, finish time: -1, write cost: 742ms, reason:  attachment: com.starrocks.load.loadv2.ManualLoadTxnCommitAttachment@31646330 tabletCommitInfos size: 1] successfully committed
+2024-12-22 23:10:44.420+08:00 INFO (PUBLISH_VERSION|24) [TxnStateCallbackFactory.removeCallback():47] remove callback of txn state : 12006. current callback size: 3
+2024-12-22 23:10:44.426+08:00 INFO (PUBLISH_VERSION|24) [DatabaseTransactionMgr.finishTransaction():1214] finish transaction TransactionState. txn_id: 2006, label: 63141c9d-10bc-4629-b323-a01d56e64ffe, db id: 11013, table id list: 11015, callback id: 12006, coordinator: FE: 192.168.216.86, transaction status: VISIBLE, error replicas num: 0, replica ids: , prepare time: 1734880243660, write end time: 1734880244402, allow commit time: -1, commit time: 1734880244402, finish time: 1734880244420, write cost: 742ms, wait for publish cost: 2ms, publish rpc cost: 4ms, finish txn cost: 12ms, publish total cost: 18ms, total cost: 760ms, reason:  attachment: com.starrocks.load.loadv2.ManualLoadTxnCommitAttachment@31646330 tabletCommitInfos size: 1 successfully
+
+be.INFO.log：
+I20241222 23:10:43.635740 140614709618432 stream_load.cpp:243] new income streaming load request.id=884666671aa397a2-515a8b05301ff7bd, job_id=-1, txn_id: -1, label=63141c9d-10bc-4629-b323-a01d56e64ffe, db=test, db=test, tbl=object_stat
+I20241222 23:10:43.729491 140614709618432 stream_load_executor.cpp:77] begin to execute job. label=63141c9d-10bc-4629-b323-a01d56e64ffe, txn_id: 2006, query_id=88466667-1aa3-97a2-515a-8b05301ff7bd
+I20241222 23:10:43.729609 140614709618432 plan_fragment_executor.cpp:83] Prepare(): query_id=88466667-1aa3-97a2-515a-8b05301ff7bd fragment_instance_id=88466667-1aa3-97a2-515a-8b05301ff7be backend_num=0
+I20241222 23:10:43.730211 140617358862080 plan_fragment_executor.cpp:192] Open(): fragment_instance_id=88466667-1aa3-97a2-515a-8b05301ff7be
+I20241222 23:10:43.731256 140615488755456 local_tablets_channel.cpp:735] LocalTabletsChannel txn_id: 2006 load_id: 88466667-1aa3-97a2-515a-8b05301ff7bd sink_id: 0 open 2 delta writer: [11035:1][11017:1]0 failed_tablets:  _num_remaining_senders: 1
+I20241222 23:10:44.309298 140615455184640 local_tablets_channel.cpp:593] LocalTabletsChannel txn_id: 2006 load_id: 88466667-1aa3-97a2-515a-8b05301ff7bd sink_id: 0 commit 1 tablets: 11035
+I20241222 23:10:44.380667 140617358862080 tablet_sink_index_channel.cpp:830] OlapTableSink txn_id: 2006 load_id: 88466667-1aa3-97a2-515a-8b05301ff7bd commit 1 tablets: 11035
+I20241222 23:10:44.380748 140617358862080 tablet_sink_sender.cpp:348] Olap table sink statistics. load_id: 88466667-1aa3-97a2-515a-8b05301ff7bd, txn_id: 2006, add chunk time(ms)/wait lock time(ms)/num: {10001:(89)(0)(25)} 
+I20241222 23:10:44.380991 140617358862080 plan_fragment_executor.cpp:496] Fragment 88466667-1aa3-97a2-515a-8b05301ff7be:(Active: 649.041ms, non-child: 0.00%)
+   - InstanceAllocatedMemoryUsage: 255.75 MB
+   - InstanceDeallocatedMemoryUsage: 49.75 MB
+   - InstancePeakMemoryUsage: 196.34 MB
+   - MemoryLimit: -1.00 B
+   - RowsProduced: 100.00K
+  OlapTableSink:(Active: 115.933ms, non-child: 17.86%)
+     - TxnID: 2006
+     - IndexNum: 1
+     - ReplicatedStorage: true
+     - AutomaticPartition: true
+     - AutomaticBucketSize: 0
+     - AllocAutoIncrementTime: 3.384us
+     - CloseWaitTime: 72.274ms
+     - OpenTime: 1.418ms
+     - PrepareDataTime: 17.373ms
+       - ConvertChunkTime: 40.832us
+       - ValidateDataTime: 1.782ms
+     - RowsFiltered: 0
+     - RowsRead: 100.00K
+     - RowsReturned: 100.00K
+     - RpcClientSideTime: 129.536ms
+     - RpcServerSideTime: 89.525ms
+     - RpcServerWaitFlushTime: 0.000ns
+     - SendDataTime: 24.749ms
+       - PackChunkTime: 18.491ms
+       - SendRpcTime: 12.270ms
+         - CompressTime: 0.000ns
+         - SerializeChunkTime: 2.416ms
+       - WaitResponseTime: 192.669us
+  FILE_SCAN_NODE (id=0):(Active: 533.809ms, non-child: 82.25%)
+     - BytesRead: 0
+     - IOTaskExecTime: 0.000ns
+     - IOTaskWaitTime: 0.000ns
+     - NumDiskAccess: 0
+     - PeakMemoryUsage: 0
+     - RowsRead: 0
+     - RowsReturned: 100.00K
+     - RowsReturnedRate: 187.33 K/sec
+     - ScanTime: 573.650ms
+     - ScannerQueueCounter: 1
+     - ScannerQueueTime: 1.885us
+     - ScannerThreadsInvoluntaryContextSwitches: 0
+     - ScannerThreadsTotalWallClockTime: 0.000ns
+       - MaterializeTupleTime(*): 0.000ns
+       - ScannerThreadsSysTime: 0.000ns
+       - ScannerThreadsUserTime: 0.000ns
+     - ScannerThreadsVoluntaryContextSwitches: 0
+     - TotalRawReadTime(*): 0.000ns
+     - TotalReadThroughput: 0.00 /sec
+    DataSource:
+       - DataSourceType: FileDataSource
+       - FileScanner: 0
+         - CastChunkTime: 3.645ms
+         - CreateChunkTime: 231.129us
+         - FileReadCount: 2
+         - FileReadTime: 404.965ms
+         - FillTime: 0.000ns
+         - MaterializeTime: 181.216us
+         - ReadTime: 0.000ns
+       - ScannerTotalTime: 573.461ms
+I20241222 23:10:44.405289 140615293536000 task_worker_pool.cpp:188] Submit task success. type=PUBLISH_VERSION, signature=2006, task_count_in_queue=1
+I20241222 23:10:44.405316 140615651886848 task_worker_pool.cpp:526] get publish version task txn_id: 2006 priority queue size: 1
+I20241222 23:10:44.406250 140615651886848 publish_version.cpp:279] publish_version success. txn_id: 2006 #partition:1 #tablet:1 time:1ms #already_finished:0
+I20241222 23:10:44.407499 140615651886848 task_worker_pool.cpp:576] batch submit 1 finish publish version task txn publish task(s). #dir:0 flush:0ms
+
+{"TxnId":2006,"Label":"63141c9d-10bc-4629-b323-a01d56e64ffe","Status":"Success","Message":"OK","NumberTotalRows":100000,"NumberLoadedRows":100000,"NumberFilteredRows":0,"NumberUnselectedRows":0,"LoadBytes":26386381,"LoadTimeMs":789,"BeginTxnTimeMs":25,"StreamLoadPlanTimeMs":67,"ReadDataTimeMs":77,"WriteDataTimeMs":651,"CommitAndPublishTimeMs":44}
+
