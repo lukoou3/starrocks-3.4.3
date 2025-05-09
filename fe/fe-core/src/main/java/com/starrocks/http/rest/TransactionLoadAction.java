@@ -63,6 +63,7 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.WarehouseManager;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.TNetworkAddress;
+import com.starrocks.transaction.GlobalTransactionMgr;
 import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionState.LoadJobSourceType;
 import io.netty.handler.codec.http.HttpMethod;
@@ -170,6 +171,7 @@ public class TransactionLoadAction extends RestBaseAction {
 
     public static void registerAction(ActionController controller) throws IllegalArgException {
         ac = new TransactionLoadAction(controller);
+        // 处理事务的http handler注册
         controller.registerHandler(HttpMethod.POST, "/api/transaction/{" + TXN_OP_KEY + "}", ac);
         controller.registerHandler(HttpMethod.PUT, "/api/transaction/{" + TXN_OP_KEY + "}", ac);
     }
@@ -211,11 +213,18 @@ public class TransactionLoadAction extends RestBaseAction {
     }
 
     protected void executeTransaction(BaseRequest request, BaseResponse response) throws UserException {
+        // 解析事务操作参数
         TransactionOperationParams txnOperationParams = toTxnOperationParams(request);
         TransactionOperation txnOperation = txnOperationParams.getTxnOperation();
         String label = txnOperationParams.getLabel();
 
         TransactionOperationHandler txnOperationHandler = getTxnOperationHandler(txnOperationParams);
+        /**
+         * 处理事务操作
+         *   @see TransactionWithoutChannelHandler#handle
+         *   @see TransactionWithoutChannelHandler#handleCommitTransaction
+         *   @see GlobalTransactionMgr#commitPreparedTransaction(long dbId, long transactionId, long timeoutMillis)  获取锁有可能超时，超时返回get database write lock timeout
+         */
         ResultWrapper result = txnOperationHandler.handle(request, response);
         if (null != result.getResult()) {
             sendResult(request, response, result.getResult());
@@ -324,10 +333,17 @@ public class TransactionLoadAction extends RestBaseAction {
         TransactionOperation txnOperation = TransactionOperation.parse(request.getSingleParameter(TXN_OP_KEY))
                 .orElseThrow(() -> new UserException(
                         "Unknown transaction operation: " + request.getSingleParameter(TXN_OP_KEY)));
+        /**
+         * 获取超时时间的代码，如果header中设置timeout取timeout，没有则默认20s
+         * 超时会返回get database write lock timeout报错
+         * flink发送请求代码在TransactionStreamLoader和DefaultStreamLoader类代码中
+         *    TXN_BEGIN和TXN_LOAD传入了timeout，TXN_PREPARE和TXN_COMMIT没有传。
+         *    prepare和commit方法没有设置额外的Headers参数，服务端就是使用的默认值20s。
+         */
         Long timeoutMillis = Optional.ofNullable(request.getRequest().headers().get(TIMEOUT_KEY))
                 .map(Long::parseLong)
                 .map(sec -> sec * 1000L)
-                .orElse(DEFAULT_TXN_TIMEOUT_MILLIS);
+                .orElse(DEFAULT_TXN_TIMEOUT_MILLIS); // timeoutMillis
         LoadJobSourceType sourceType = parseSourceType(request.getSingleParameter(SOURCE_TYPE));
 
         Integer channelId = Optional

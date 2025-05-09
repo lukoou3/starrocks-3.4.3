@@ -330,6 +330,7 @@ public class GlobalTransactionMgr implements MemoryTrackable {
         List<Long> tableIdList = transactionState.getTableIdList();
 
         Locker locker = new Locker();
+        // 获取锁有可能超时，超时返回get database write lock timeout
         if (!locker.tryLockTablesWithIntensiveDbLock(db.getId(), tableIdList, LockType.WRITE,
                 timeoutMillis, TimeUnit.MILLISECONDS)) {
             String errMsg = String.format("get database write lock timeout, transactionId=%d, database=%s, timeoutMillis=%d",

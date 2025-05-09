@@ -1602,6 +1602,9 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
     }
 
+    /**
+     * 处理be发送的streamLoadPut请求
+     */
     @Override
     public TStreamLoadPutResult streamLoadPut(TStreamLoadPutRequest request) {
         String clientAddr = getClientAddrAsString();
@@ -1614,6 +1617,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         TStatus status = new TStatus(TStatusCode.OK);
         result.setStatus(status);
         try {
+            // streamLoadPutImpl方法是具体实现
             result.setParams(streamLoadPutImpl(request));
         } catch (LockTimeoutException e) {
             LOG.warn("failed to get stream load plan: {}", e.getMessage());
@@ -1663,6 +1667,12 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                     table.getName(), table.getName()));
         }
 
+        /**
+         * 超时时间：
+         *   如果请求设置thrift_rpc_timeout_ms取thrift_rpc_timeout_ms，否则默认5s
+         *   超时时间取thrift_rpc_timeout_ms的3/4，避免超时
+         * 超时会返回get database read lock timeout报错
+         */
         long timeoutMs = request.isSetThrift_rpc_timeout_ms() ? request.getThrift_rpc_timeout_ms() : 5000;
         // Make timeout less than thrift_rpc_timeout_ms.
         // Otherwise, it will result in error like "call frontend service failed"

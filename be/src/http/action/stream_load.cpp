@@ -632,7 +632,16 @@ Status StreamLoadAction::_process_put(HttpRequest* http_req, StreamLoadContext* 
             return Status::InvalidArgument("Invalid log_rejected_record_num format");
         }
     }
+    /**
+     * rpc_timeout_ms超时时间：
+     *   默认是be的配置txn_commit_rpc_timeout_ms
+     *   如果header设置了timeout，还需根据timeout计算：
+     *      rpc_timeout_ms = min(timeout / 2, rpc_timeout_ms)
+     *      rpc_timeout_ms = max(timeout / 4, rpc_timeout_ms)
+     * 超时会返回get database read lock timeout报错
+     */
     int32_t rpc_timeout_ms = config::txn_commit_rpc_timeout_ms;
+    // 如果设置超时时间, 先min(timeout/2)再max(timeout/4)
     if (ctx->timeout_second != -1) {
         request.__set_timeout(ctx->timeout_second);
         rpc_timeout_ms = std::min(ctx->timeout_second * 1000 / 2, rpc_timeout_ms);
