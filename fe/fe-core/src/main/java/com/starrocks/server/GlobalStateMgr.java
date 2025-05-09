@@ -1229,6 +1229,7 @@ public class GlobalStateMgr {
 
     private void transferToLeader() {
         FrontendNodeType oldType = feType;
+        // 当切换为Leader时停止replayer线程
         // stop replayer
         if (replayer != null) {
             replayer.setStop();
@@ -1488,7 +1489,7 @@ public class GlobalStateMgr {
         }
 
         // transfer from INIT/UNKNOWN to OBSERVER/FOLLOWER
-
+        // 当切换为Follower时创建启动replayer线程
         if (replayer == null) {
             createReplayer();
             replayer.start();
@@ -1842,6 +1843,7 @@ public class GlobalStateMgr {
     }
 
     public void createReplayer() {
+        // edit log replay线程，REPLAY_INTERVAL_MS为1ms还是比较频繁的
         replayer = new Daemon("replayer", REPLAY_INTERVAL_MS) {
             private JournalCursor cursor = null;
             // avoid numerous 'meta out of date' log
@@ -1881,16 +1883,23 @@ public class GlobalStateMgr {
                     err = true;
                 }
 
+                /**
+                 * 设置canRead状态，两个参数：hasLog, err
+                 *  只要出现异常，则设置canRead为false，isReady为false
+                 *  没有出现异常，才会根据meta_delay_toleration_second参数判断延时超时
+                 */
                 setCanRead(hasLog, err);
             }
 
             private void setCanRead(boolean hasLog, boolean err) {
+                // 只要出现异常，则设置canRead为false
                 if (err) {
                     canRead.set(false);
                     isReady.set(false);
                     return;
                 }
 
+                // 忽略元数据检查的参数
                 if (Config.ignore_meta_check) {
                     // can still offer read, but is not ready
                     canRead.set(true);
@@ -1899,6 +1908,7 @@ public class GlobalStateMgr {
                 }
 
                 long currentTimeMs = System.currentTimeMillis();
+                // meta_delay_toleration_second参数
                 if (currentTimeMs - synchronizedTimeMs > Config.meta_delay_toleration_second * 1000L) {
                     if (currentTimeMs - lastMetaOutOfDateLogTime > 5 * 1000L) {
                         // we still need this log to observe this situation

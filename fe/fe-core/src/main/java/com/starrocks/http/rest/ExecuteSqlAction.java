@@ -285,6 +285,7 @@ public class ExecuteSqlAction extends RestBaseAction {
                           HttpConnectContext context)
             throws StarRocksHttpException {
 
+        // 如果FE无法读取，返回503状态码
         // if Fe can not read, just throw 503
         if (context.isForwardToLeader()) {
             throw new StarRocksHttpException(SERVICE_UNAVAILABLE, "non-master FE can not read!");

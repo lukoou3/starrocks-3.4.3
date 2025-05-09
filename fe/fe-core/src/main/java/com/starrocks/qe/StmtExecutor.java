@@ -391,6 +391,7 @@ public class StmtExecutor {
     }
 
     /**
+     * 是否从follower者转发给leader，这在StmtExecutor的生命周期中应该是相同的。
      * Whether to forward to leader from follower which should be the same in the StmtExecutor's lifecycle.
      */
     public boolean isForwardToLeader() {
@@ -398,6 +399,7 @@ public class StmtExecutor {
     }
 
     public boolean getIsForwardToLeaderOrInit(boolean isInitIfNoPresent) {
+        // 如果没有初始化就调用initForwardToLeaderState初始化获取值，之后使用缓存的值，保证在StmtExecutor的lifecycle中isForwardToLeader保持不变
         if (!isForwardToLeaderOpt.isPresent()) {
             if (!isInitIfNoPresent) {
                 return false;
@@ -408,6 +410,7 @@ public class StmtExecutor {
     }
 
     private boolean initForwardToLeaderState() {
+        // 如果是Leader，自然不需要重定向到Leader
         if (GlobalStateMgr.getCurrentState().isLeader()) {
             return false;
         }
@@ -441,6 +444,7 @@ public class StmtExecutor {
                 return context.getSessionVariable().isFollowerForwardToLeaderOpt().get();
             }
 
+            // 如果canRead值为false，返回true，需要重定向到Leader
             if (!GlobalStateMgr.getCurrentState().canRead()) {
                 return true;
             }

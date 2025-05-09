@@ -79,6 +79,11 @@ public class HttpConnectProcessor extends ConnectProcessor {
 
         ctx.setIsLastStmt(true);
 
+        /**
+         * 对于http协议，如果当前FE无法读取，只需让客户端与leader对话
+         * 当此fe为follower且GlobalStateMgr的canRead值为false时，需要转发给leader
+         * 关键是GlobalStateMgr的canRead状态值，当follower edit log replay异常或则延时超过大于meta_delay_toleration_second配置时canRead为false。
+         */
         //  for http protocal, if current FE can't read, just let client talk with leader
         if (executor.isForwardToLeader()) {
             LOG.warn("non-master FE can not read, forward HTTP request to master");
