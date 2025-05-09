@@ -944,6 +944,10 @@ public class Config extends ConfigBase {
     @ConfField
     public static int publish_version_interval_ms = 10;
 
+    /**
+     * 开启batch_publish, 3.2.3 版本后支持, 3.2默认还是false
+     * fe的配置在这个文件
+     */
     @ConfField(mutable = true)
     public static boolean lake_enable_batch_publish_version = true;
 
