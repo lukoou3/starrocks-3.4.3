@@ -65,9 +65,12 @@ public class ReadListener implements ChannelListener<ConduitStreamSourceChannel>
         ctx.suspendAcceptQuery();
         // start async query handle in task thread.
         try {
+            // 把处理方法提交到线程池处理
             channel.getWorker().execute(() -> {
+                // 下面的代码是在线程池中(starrocks-mysql-nio-pool)运行的
                 ctx.setThreadLocalInfo();
                 try {
+                    // 处理sql命令
                     connectProcessor.processOnce();
                     if (ctx.isKilled()
                             || (GracefulExitFlag.isGracefulExit()

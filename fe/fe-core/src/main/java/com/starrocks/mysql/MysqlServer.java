@@ -64,6 +64,7 @@ public class MysqlServer {
 
     private AcceptingChannel<StreamConnection> server;
 
+    // mysql任务执行线程，线程数max_mysql_service_task_threads_num(默认4096)
     // default task service.
     private final ExecutorService taskService = ThreadPoolManager
             .newDaemonCacheThreadPool(Config.max_mysql_service_task_threads_num, "starrocks-mysql-nio-pool", true);
@@ -71,7 +72,7 @@ public class MysqlServer {
     public MysqlServer(int port, ConnectScheduler connectScheduler) {
         this.port = port;
         this.xnioWorker = Xnio.getInstance().createWorkerBuilder()
-                .setWorkerName("starrocks-mysql-nio")
+                .setWorkerName("starrocks-mysql-nio") // mysql服务nio线程, 线程数mysql_service_io_threads_num(默认4)
                 .setWorkerIoThreads(Config.mysql_service_io_threads_num)
                 .setExternalExecutorService(taskService).build();
         // connectScheduler only used for idle check.

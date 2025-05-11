@@ -55,12 +55,8 @@ import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.metric.ResourceGroupMetricMgr;
-import com.starrocks.mysql.MysqlChannel;
-import com.starrocks.mysql.MysqlCommand;
-import com.starrocks.mysql.MysqlPacket;
-import com.starrocks.mysql.MysqlProto;
-import com.starrocks.mysql.MysqlSerializer;
-import com.starrocks.mysql.MysqlServerStatusFlag;
+import com.starrocks.mysql.*;
+import com.starrocks.mysql.nio.ReadListener;
 import com.starrocks.plugin.AuditEvent.EventType;
 import com.starrocks.proto.PQueryStatistics;
 import com.starrocks.rpc.RpcException;
@@ -89,6 +85,7 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.xnio.conduits.ConduitStreamSourceChannel;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -301,6 +298,16 @@ public class ConnectProcessor {
         }
     }
 
+    /**
+     * mysql sql查询的流程：
+     * @see MysqlServer#start() 启动mysql服务
+     * @see ReadListener#handleEvent 收到mysql事件处理，把处理方法提交到线程池处理
+     * @see ConnectProcessor#processOnce() 处理sql命令
+     * @see ConnectProcessor#handleQuery() 处理sql查询
+     * @see StmtExecutor#execute() 处理sql stmt
+     * @see StmtExecutor#handleQueryStmt 处理sql查询
+     * @see MysqlChannel#sendOnePacket(ByteBuffer) 向客户端发送查询结果
+     */
     // process COM_QUERY statement,
     protected void handleQuery() {
         MetricRepo.COUNTER_REQUEST_ALL.increase(1L);
@@ -334,6 +341,7 @@ public class ConnectProcessor {
         boolean onlySetStmt = true;
         try {
             ctx.setQueryId(UUIDUtil.genUUID());
+            // 是否打印查询sql
             if (Config.enable_print_sql) {
                 LOG.info("Begin to execute sql, type: query，query id:{}, sql:{}", ctx.getQueryId(), originStmt);
             }

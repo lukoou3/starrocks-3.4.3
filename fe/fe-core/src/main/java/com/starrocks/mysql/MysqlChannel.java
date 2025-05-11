@@ -338,6 +338,7 @@ public class MysqlChannel {
     }
 
     public void startAcceptQuery(ConnectContext connectContext, ConnectProcessor connectProcessor) {
+        // ReadListener监听处理mysql命令
         conn.getSourceChannel().setReadListener(new ReadListener(connectContext, connectProcessor));
         conn.getSourceChannel().resumeReads();
     }
