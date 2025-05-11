@@ -93,6 +93,7 @@ public class StatementPlanner {
 
     public static ExecPlan plan(StatementBase stmt, ConnectContext session) {
         if (session instanceof HttpConnectContext) {
+            // sql statement转为ExecPlan
             return plan(stmt, session, TResultSinkType.HTTP_PROTOCAL);
         } else if (session instanceof ArrowFlightSqlConnectContext) {
             return plan(stmt, session, TResultSinkType.ARROW_FLIGHT_PROTOCAL);
@@ -118,6 +119,7 @@ public class StatementPlanner {
         // 1. For all queries, we need db lock when analyze phase
         PlannerMetaLocker plannerMetaLocker = new PlannerMetaLocker(session, stmt);
         try (var guard = session.bindScope()) {
+            // 分析，为什么没有返回值，因为会修改stmt内部属性，解析设置函数就是在这里
             // Analyze
             analyzeStatement(stmt, session, plannerMetaLocker);
 
@@ -141,6 +143,7 @@ public class StatementPlanner {
                 } else {
                     long planStartTime = OptimisticVersion.generate();
                     unLock(plannerMetaLocker);
+                    // 创建ExecPlan
                     plan = createQueryPlanWithReTry(queryStmt, session, resultSinkType, plannerMetaLocker, planStartTime);
                 }
                 setOutfileSink(queryStmt, plan);

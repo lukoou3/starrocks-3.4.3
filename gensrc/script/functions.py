@@ -16,6 +16,7 @@
 # limitations under the License.
 #
 
+# 注册的函数，格式如下，最后定义的是BE cpp中对应的函数
 # The format is:
 #   <function id> <name>, <exception_safe>, <check_overflow>, <return_type>, [<args>], <backend fn>
 # With an optional

@@ -20,48 +20,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.re2j.Pattern;
-import com.starrocks.analysis.AnalyticExpr;
-import com.starrocks.analysis.ArithmeticExpr;
-import com.starrocks.analysis.ArraySliceExpr;
-import com.starrocks.analysis.ArrowExpr;
-import com.starrocks.analysis.BetweenPredicate;
-import com.starrocks.analysis.BinaryPredicate;
-import com.starrocks.analysis.BoolLiteral;
-import com.starrocks.analysis.CaseExpr;
-import com.starrocks.analysis.CastExpr;
-import com.starrocks.analysis.CloneExpr;
-import com.starrocks.analysis.CollectionElementExpr;
-import com.starrocks.analysis.CompoundPredicate;
-import com.starrocks.analysis.DictQueryExpr;
-import com.starrocks.analysis.ExistsPredicate;
-import com.starrocks.analysis.Expr;
-import com.starrocks.analysis.ExprId;
-import com.starrocks.analysis.FunctionCallExpr;
-import com.starrocks.analysis.FunctionName;
-import com.starrocks.analysis.GroupingFunctionCallExpr;
-import com.starrocks.analysis.InPredicate;
-import com.starrocks.analysis.InformationFunction;
-import com.starrocks.analysis.IntLiteral;
-import com.starrocks.analysis.IsNullPredicate;
-import com.starrocks.analysis.LargeIntLiteral;
-import com.starrocks.analysis.LikePredicate;
-import com.starrocks.analysis.LiteralExpr;
-import com.starrocks.analysis.MatchExpr;
-import com.starrocks.analysis.MultiInPredicate;
-import com.starrocks.analysis.NamedArgument;
-import com.starrocks.analysis.NullLiteral;
-import com.starrocks.analysis.OrderByElement;
-import com.starrocks.analysis.Parameter;
-import com.starrocks.analysis.PlaceHolderExpr;
-import com.starrocks.analysis.Predicate;
-import com.starrocks.analysis.SlotRef;
-import com.starrocks.analysis.StringLiteral;
-import com.starrocks.analysis.SubfieldExpr;
-import com.starrocks.analysis.Subquery;
-import com.starrocks.analysis.TableName;
-import com.starrocks.analysis.TimestampArithmeticExpr;
-import com.starrocks.analysis.UserVariableExpr;
-import com.starrocks.analysis.VariableExpr;
+import com.starrocks.analysis.*;
 import com.starrocks.authorization.AuthorizationMgr;
 import com.starrocks.authorization.PrivilegeException;
 import com.starrocks.authorization.RolePrivilegeCollectionV2;
@@ -101,6 +60,7 @@ import com.starrocks.sql.ast.MapExpr;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.ast.UserVariable;
 import com.starrocks.sql.common.TypeManager;
+import com.starrocks.sql.parser.NodePosition;
 import com.starrocks.thrift.TDictQueryExpr;
 import com.starrocks.thrift.TFunctionBinaryType;
 
@@ -1017,8 +977,18 @@ public class ExpressionAnalyzer {
             String fnName = node.getFnName().getFunction();
             // check fn & throw exception direct if analyze failed
             checkFunction(fnName, node, argumentTypes);
+            /**
+             * 查找函数最终还是调用FunctionSet的getFunction方法
+             * @see FunctionAnalyzer#getAnalyzedFunction(ConnectContext, FunctionCallExpr, Type[])
+             * @see FunctionAnalyzer#getAnalyzedFunctionImpl(ConnectContext, FunctionCallExpr, Type[], List)
+             * @see FunctionAnalyzer#getAnalyzedBuiltInFunction(ConnectContext, String, FunctionParams, Type[], NodePosition)
+             * @see Expr#getBuiltinFunction(String, Type[], Function.CompareMode)
+             * @see GlobalStateMgr#getFunction(Function, Function.CompareMode)
+             * @see FunctionSet#getFunction(Function, Function.CompareMode)
+             */
             // get function by function expression and argument types
             Function fn = FunctionAnalyzer.getAnalyzedFunction(session, node, argumentTypes);
+            // 没有找到匹配的函数
             if (fn == null) {
                 String msg = String.format("No matching function with signature: %s(%s)",
                         fnName,
@@ -1026,6 +996,7 @@ public class ExpressionAnalyzer {
                                 .join(Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.toList())));
                 throw new SemanticException(msg, node.getPos());
             }
+            // 直接修改FunctionCallExpr的属性
             node.setFn(fn);
             node.setType(fn.getReturnType());
             FunctionAnalyzer.analyze(node);

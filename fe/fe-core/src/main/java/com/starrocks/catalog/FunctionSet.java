@@ -584,6 +584,7 @@ public class FunctionSet {
                     .addAll(Type.INTEGER_TYPES)
                     .build();
     /**
+     * 向量化函数
      * Use for vectorized engine, but we can't use vectorized function directly, because we
      * need to check whether the expression tree can use vectorized function from bottom to
      * top, we must to re-analyze function_call_expr when vectorized function is can't used
@@ -863,6 +864,7 @@ public class FunctionSet {
     public void init() {
         ArithmeticExpr.initBuiltins(this);
         TableFunction.initBuiltins(this);
+        // 初始化VectorizedBuiltinFunctions
         VectorizedBuiltinFunctions.initBuiltins(this);
         initAggregateBuiltins();
     }

@@ -59,6 +59,17 @@ import static org.junit.Assert.fail;
 class ParserTest {
 
     @Test
+    void testQuery() {
+        String sql = "select 1 + 2 a, if(false,1,2) b, time_slice('2025-01-18 15:44:31', INTERVAL 5 second) c, substr('2025-01-18 15:44:31', 1, 10) d, substr2('2025-01-18 15:44:31', 1, 10) e";
+        SessionVariable sessionVariable = new SessionVariable();
+        List<StatementBase> stmtList = SqlParser.parse(sql, sessionVariable);
+        for (StatementBase statementBase : stmtList) {
+            System.out.println(statementBase);
+            System.out.println(((QueryStatement)statementBase).getQueryRelation());
+        }
+    }
+
+    @Test
     void test() {
         String sql = "alter plan advisor add " +
                 "select count(*) from customer join " +
@@ -73,7 +84,10 @@ class ParserTest {
         SessionVariable sessionVariable = new SessionVariable();
         sessionVariable.setParseTokensLimit(1);
         try {
-            SqlParser.parse(sql, sessionVariable);
+            List<StatementBase> stmtList = SqlParser.parse(sql, sessionVariable);
+            for (StatementBase statementBase : stmtList) {
+                System.out.println(statementBase);
+            }
         } catch (Exception e) {
             assertContains(e.getMessage(), "Getting syntax error. Detail message: " +
                     "Statement exceeds maximum length limit");

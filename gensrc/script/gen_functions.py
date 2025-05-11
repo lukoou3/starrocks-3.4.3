@@ -191,6 +191,7 @@ def generate_cpp(path):
 
 
 if __name__ == '__main__':
+    # 生成函数注册相关的java/cpp代码
     FE_PATH = "../../fe/fe-core/target/generated-sources/build"
     BE_PATH = "../build/gen_cpp"
 

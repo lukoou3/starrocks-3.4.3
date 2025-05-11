@@ -150,6 +150,7 @@ public class ExecuteSqlAction extends RestBaseAction {
                 if (Config.enable_print_sql) {
                     LOG.info("Begin to execute sql, type: query，query id:{}, sql:{}", context.getQueryId(), requestBody.query);
                 }
+                // 解析sql语法
                 // parse the sql here, for the convenience of verification of http request
                 parsedStmt = parse(requestBody.query, context.getSessionVariable());
                 context.setStatement(parsedStmt);
@@ -239,6 +240,7 @@ public class ExecuteSqlAction extends RestBaseAction {
         StatementBase parsedStmt;
         List<StatementBase> stmts;
         try {
+            // 解析sql语法
             stmts = com.starrocks.sql.parser.SqlParser
                     .parse(sql, sessionVariables);
         } catch (ParsingException parsingException) {
