@@ -73,21 +73,27 @@ public class HttpResultSender {
         // if some data already sent to client, when exception occurs,we just close the channel
         context.setSendDate(true);
         sendHeader(nettyChannel);
+        // 发送 {"connectionId":6}
+        // 参数没有设置onlyOutputResultRaw
         // write connectId
         if (!context.isOnlyOutputResultRaw()) {
             nettyChannel.write(JsonSerializer.getConnectId(context.getConnectionId()));
         }
+        // 发送 {"meta":[{"name":"cate","type":"varchar(65533)"},{"name":"cnt","type":"bigint(20)"}]}
         // write column meta data
         ByteBuf metaData = JsonSerializer.getMetaData(execPlan.getColNames(), execPlan.getOutputExprs());
         nettyChannel.writeAndFlush(metaData);
 
         while (true) {
             batch = coord.getNext();
+            // 发送数据 {"data":["v",26883]}
             if (batch.getBatch() != null) {
                 writeResultBatch(batch.getBatch(), nettyChannel, coord, sql);
                 context.updateReturnRows(batch.getBatch().getRows().size());
             }
             if (batch.isEos()) {
+                // 发送 {"statistics":{"scanRows":698006,"scanBytes":2070,"returnRows":26}}
+                // 参数没有设置onlyOutputResultRaw
                 if (!context.isOnlyOutputResultRaw()) {
                     ByteBuf statisticData = JsonSerializer.getStatistic(batch.getQueryStatistics());
                     nettyChannel.writeAndFlush(statisticData);

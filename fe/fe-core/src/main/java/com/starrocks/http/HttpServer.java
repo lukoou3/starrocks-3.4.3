@@ -274,8 +274,12 @@ public class HttpServer {
     private class HttpServerThread implements Runnable {
         @Override
         public void run() {
+            /**
+             * FE的http server配置与启动
+             */
             // Configure the server.
             EventLoopGroup bossGroup = new NioEventLoopGroup();
+            // http worker线程数
             int numWorkerThreads = Math.max(0, Config.http_worker_threads_num);
             NioEventLoopGroup workerGroup = new NioEventLoopGroup(numWorkerThreads);
             try {

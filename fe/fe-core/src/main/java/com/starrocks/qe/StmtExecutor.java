@@ -652,6 +652,7 @@ public class StmtExecutor {
                 LOG.debug("no need to transfer to Leader. stmt: {}", context.getStmtId());
             }
 
+            // 处理sql查询语句
             if (parsedStmt instanceof QueryStatement) {
                 final boolean isStatisticsJob = AnalyzerUtils.isStatisticsJob(context, parsedStmt);
                 context.setStatisticsJob(isStatisticsJob);
@@ -662,6 +663,7 @@ public class StmtExecutor {
                 int retryTime = Config.max_query_retry_time;
                 ExecuteExceptionHandler.RetryContext retryContext =
                         new ExecuteExceptionHandler.RetryContext(0, execPlan, context, parsedStmt);
+                // 这里似乎还有查询重试max_query_retry_time(默认最多查询2次)
                 for (int i = 0; i < retryTime; i++) {
                     boolean needRetry = false;
                     retryContext.setRetryTime(i);
@@ -675,6 +677,7 @@ public class StmtExecutor {
                                     new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
                         }
 
+                        // 执行查询
                         handleQueryStmt(retryContext.getExecPlan());
                         break;
                     } catch (Exception e) {
@@ -1344,6 +1347,7 @@ public class StmtExecutor {
 
         RowBatch batch = null;
         if (context instanceof HttpConnectContext) {
+            // 发送查询结果
             batch = httpResultSender.sendQueryResult(coord, execPlan, parsedStmt.getOrigStmt().getOrigStmt());
         } else if (context instanceof ArrowFlightSqlConnectContext) {
             ArrowFlightSqlConnectContext ctx = (ArrowFlightSqlConnectContext) context;

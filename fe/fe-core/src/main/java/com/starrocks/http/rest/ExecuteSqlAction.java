@@ -43,17 +43,9 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.StarRocksHttpException;
 import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.util.LogUtil;
-import com.starrocks.http.ActionController;
-import com.starrocks.http.BaseRequest;
-import com.starrocks.http.BaseResponse;
-import com.starrocks.http.HttpConnectContext;
-import com.starrocks.http.HttpConnectProcessor;
-import com.starrocks.http.IllegalArgException;
-import com.starrocks.qe.ConnectContext;
-import com.starrocks.qe.ConnectScheduler;
-import com.starrocks.qe.OriginStatement;
-import com.starrocks.qe.QueryState;
-import com.starrocks.qe.SessionVariable;
+import com.starrocks.http.*;
+import com.starrocks.qe.*;
+import com.starrocks.qe.scheduler.Coordinator;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.GracefulExitFlag;
 import com.starrocks.service.ExecuteEnv;
@@ -63,6 +55,7 @@ import com.starrocks.sql.ast.ShowStmt;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.ast.SystemVariable;
 import com.starrocks.sql.parser.ParsingException;
+import com.starrocks.sql.plan.ExecPlan;
 import com.starrocks.thrift.TResultSinkFormatType;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpMethod;
@@ -94,6 +87,7 @@ public class ExecuteSqlAction extends RestBaseAction {
     }
 
     public static void registerAction(ActionController controller) throws IllegalArgException {
+        // HTTP SQL API
         controller.registerHandler(HttpMethod.POST,
                 "/api/v1/catalogs/{" + CATALOG_KEY + "}/databases/{" + DB_KEY + "}/sql",
                 new ExecuteSqlAction(controller));
@@ -101,14 +95,35 @@ public class ExecuteSqlAction extends RestBaseAction {
                 new ExecuteSqlAction(controller));
     }
 
+    /**
+     * http sql查询的调用过程：
+     * @see HttpServerHandler#channelRead(ChannelHandlerContext, Object) netty处理channel
+     * @see RestBaseAction#execute(BaseRequest, BaseResponse) http用户认证后调用具体处理方法
+     * @see ExecuteSqlAction#executeWithoutPassword(BaseRequest, BaseResponse) HTTP SQL API的http线程处理方法，以上处理在nio线程(nioEventLoopGroup)
+     * @see ExecuteSqlAction#realWork(BaseRequest, String, BaseResponse) http sql查询的处理方法，以下处理在sql查询线程(starrocks-http-nio-pool)
+     * @see HttpConnectProcessor#processOnce() 处理查询
+     * @see HttpConnectProcessor#handleQuery() 处理查询
+     * @see StmtExecutor#execute() 处理sql stmt
+     * @see StmtExecutor#handleQueryStmt 处理sql查询
+     * @see HttpResultSender#sendQueryResult(Coordinator, ExecPlan, String) 向客户端发送查询结果
+     * @see ExecuteSqlAction#finalize 只是抛出异常如果查询发生错误或者发送200的状态码
+     */
     @Override
     protected void executeWithoutPassword(BaseRequest request, BaseResponse response) throws DdlException {
+        /**
+         * HTTP SQL API的http线程处理方法
+         * 直接把处理方法提交到TASKSERVICE线程池(starrocks-http-nio-pool)，最大线程数是max_http_sql_service_task_threads_num(默认4096)
+         * 所以说http sql查询基本是不占用fe的http服务的nio线程的
+         */
         // Get the content before submitting to executor pool,
         // because the request body will be released after handleAction.
         String content = request.getContent();
         TASKSERVICE.submit(() -> realWork(request, content, response));
     }
 
+    /**
+     * http sql查询的处理方法
+     */
     private void realWork(BaseRequest request, String requestContent, BaseResponse response) {
         StatementBase parsedStmt;
 
@@ -131,6 +146,7 @@ public class ExecuteSqlAction extends RestBaseAction {
                 // set result format as json,
                 context.setResultSinkFormatType(TResultSinkFormatType.JSON);
                 checkSessionVariable(requestBody.sessionVariables, context);
+                // 如果fe配置enable_print_sql为true，打印sql，默认是false
                 if (Config.enable_print_sql) {
                     LOG.info("Begin to execute sql, type: query，query id:{}, sql:{}", context.getQueryId(), requestBody.query);
                 }
@@ -147,6 +163,11 @@ public class ExecuteSqlAction extends RestBaseAction {
                 // store context in current thread, Executor rely on this thread local variable
                 context.setThreadLocalInfo();
 
+                /**
+                 * 处理请求, http sql查询发送数据是在找个方法，因为是流式返回数据，下面的finalize方法仅仅返回状态码
+                 * http sql查询是HttpConnectProcessor类处理
+                 * mysql sql查询是ConnectProcessor类处理
+                 */
                 // process this request
                 HttpConnectProcessor connectProcessor = new HttpConnectProcessor(context);
                 connectProcessor.processOnce();
@@ -157,6 +178,9 @@ public class ExecuteSqlAction extends RestBaseAction {
                 ConnectContext.remove();
             }
 
+            /**
+             * finalize仅仅只是抛出异常如果查询发生错误或者发送200的状态码
+             */
             // finalize just send 200 for kill, and throw StarRocksHttpException if context's error is set
             finalize(request, response, parsedStmt, context);
 
@@ -164,9 +188,11 @@ public class ExecuteSqlAction extends RestBaseAction {
                 context.getNettyChannel().close();
             }
         } catch (StarRocksHttpException e) {
+            // http sql查询发生异常，打印日志
             LOG.warn("fail to process url: {}", request.getRequest().uri(), e);
             RestBaseResult failResult = new RestBaseResult(e.getMessage());
             response.getContent().append(failResult.toJson());
+            // 返回错误
             writeResponse(request, response, HttpResponseStatus.valueOf(e.getCode().code()));
         }
         // for other rest api, HttpServerHanler.channelReadComplete will flush the buffer

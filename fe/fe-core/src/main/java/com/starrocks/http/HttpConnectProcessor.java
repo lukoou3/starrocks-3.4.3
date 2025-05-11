@@ -74,6 +74,7 @@ public class HttpConnectProcessor extends ConnectProcessor {
         StatementBase parsedStmt = ((HttpConnectContext) ctx).getStatement();
         String sql = parsedStmt.getOrigStmt().originStmt;
 
+        // sql stmt处理
         executor = new StmtExecutor(ctx, parsedStmt);
         ctx.setExecutor(executor);
 
@@ -92,6 +93,7 @@ public class HttpConnectProcessor extends ConnectProcessor {
         }
 
         try {
+            // sql stmt处理
             executor.addRunningQueryDetail(parsedStmt);
             executor.execute();
         } catch (IOException e) {
