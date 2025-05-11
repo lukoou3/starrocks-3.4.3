@@ -36,7 +36,7 @@ fe/*/target
 fe/fe-core/gen
 fe/fe-common/.classpath
 fe/fe-core/src/main/java/com/starrocks/sql/parser/gen
-fe/fe-core/src/main/java/com/starrocks/builtins
+#fe/fe-core/src/main/java/com/starrocks/builtins
 fe/fe-core/src/main/java/com/starrocks/common/Version.java
 fe/fe-core/src/main/java/com/starrocks/proto
 fe/fe-core/src/main/java/com/starrocks/thrift
