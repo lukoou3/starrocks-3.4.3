@@ -335,6 +335,7 @@ public class Log4jConfig extends XmlConfiguration {
     }
 
     private static void reconfig() throws IOException {
+        // 他这log4j配置文件是动态生成的，没法自己配置各个方法的日志级别
         String xmlConfTemplate = generateActiveLog4jXmlConfig();
         if (!FeConstants.runningUnitTest && !FeConstants.isReplayFromQueryDump) {
             System.out.println("=====");
