@@ -1500,6 +1500,7 @@ Status TabletManager::_create_tablet_meta_unlocked(const TCreateTabletReq& reque
     }
 
     uint64_t shard_id = 0;
+    // 获取shard_id
     if (!store->get_shard(&shard_id).ok()) {
         LOG(WARNING) << "Fail to get root path shard";
         return Status::InternalError("fail to get root path shard");

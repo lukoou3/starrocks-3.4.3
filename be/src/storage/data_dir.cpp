@@ -68,7 +68,7 @@ static const char* const kTestFilePath = "/.testfile";
 
 DataDir::DataDir(const std::string& path, TStorageMedium::type storage_medium, TabletManager* tablet_manager,
                  TxnManager* txn_manager)
-        : _path(path),
+        : _path(path), // 根路径
           _available_bytes(0),
           _disk_capacity_bytes(0),
           _storage_medium(storage_medium),
@@ -176,14 +176,21 @@ Status DataDir::_read_and_write_test_file() {
     return read_write_test_file(test_file);
 }
 
+// 获取shard_id
 Status DataDir::get_shard(uint64_t* shard) {
     std::stringstream shard_path_stream;
     uint32_t next_shard = 0;
     {
         std::lock_guard<std::mutex> l(_mutex);
+        // 应该就是递增的，数量为MAX_SHARD_NUM(1024)
         next_shard = _current_shard;
         _current_shard = (_current_shard + 1) % MAX_SHARD_NUM;
     }
+    /**
+     * shard的路径。
+     * storage/olap_define.h文件中定义：static const std::string DATA_PREFIX = "/data";
+     * _path应该是数据目录根目录，构造函数传入_path参数。
+     */
     shard_path_stream << _path << DATA_PREFIX << "/" << next_shard;
     std::string shard_path = shard_path_stream.str();
     // First check whether the shard path exists. If it does not exist, sync the data directory.
@@ -227,10 +234,12 @@ void DataDir::clear_tablets(std::vector<TabletInfo>* tablet_infos) {
     _tablet_set.clear();
 }
 
+// 获取shard_id对应的路径
 std::string DataDir::get_absolute_shard_path(int64_t shard_id) {
     return strings::Substitute("$0$1/$2", _path, DATA_PREFIX, shard_id);
 }
 
+// 获取tablet的绝对路径
 std::string DataDir::get_absolute_tablet_path(int64_t shard_id, int64_t tablet_id, int32_t schema_hash) {
     return strings::Substitute("$0/$1/$2", get_absolute_shard_path(shard_id), tablet_id, schema_hash);
 }

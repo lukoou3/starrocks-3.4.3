@@ -200,6 +200,7 @@ private:
     uint64_t _current_shard;
     std::set<TabletInfo> _tablet_set;
 
+    //shard_id数量是1024
     static const uint32_t MAX_SHARD_NUM = 1024;
 
     KVStore* _kv_store = nullptr;
