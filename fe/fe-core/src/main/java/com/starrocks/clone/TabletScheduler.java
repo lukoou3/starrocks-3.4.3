@@ -107,6 +107,19 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
+ * TabletScheduler 保存由 TabletChecker 产生的 Tablet，并尝试对它们进行调度。
+ * 它同时尝试平衡集群的负载。
+ *
+ * 我们期望一种高效的方式来恢复整个集群并使其负载均衡。
+ * 情况 1：
+ * 一个后端（Backend）节点宕机。所有在该 BE 上有副本的 Tablet 应尽快修复。
+ *
+ * 情况 1.1：
+ * 由于后端宕机，某些表需要高优先级修复。因此，克隆任务应支持被抢占。
+ *
+ * 情况 2：
+ * 集群中添加了一个新的后端节点。副本应转移到该主机，以平衡集群负载。
+ *
  * TabletScheduler saved the tablets produced by TabletChecker and try to schedule them.
  * It also tries to balance the cluster load.
  * <p>
@@ -1815,6 +1828,7 @@ public class TabletScheduler extends FrontendDaemon {
 
         Preconditions.checkState(tabletCtx.getState() == TabletSchedCtx.State.RUNNING, tabletCtx.getState());
         try {
+            // 成功Clone副本会打印日志，不过打印日志的类是TabletSchedCtx
             tabletCtx.finishCloneTask(cloneTask, request);
         } catch (SchedException e) {
             tabletCtx.increaseFailedRunningCounter();
@@ -1848,6 +1862,7 @@ public class TabletScheduler extends FrontendDaemon {
         long tabletId = task.getTabletId();
         TabletSchedCtx tabletCtx = takeRunningTablets(tabletId);
         if (tabletCtx == null) {
+            // 失败
             LOG.warn("tablet info does not exist, tablet:{} backend:{}", tabletId, task.getBackendId());
             return;
         }
@@ -1877,6 +1892,7 @@ public class TabletScheduler extends FrontendDaemon {
                 replica.getMinReadableVersion());
         GlobalStateMgr.getCurrentState().getEditLog().logAddReplica(info);
         finalizeTabletCtx(tabletCtx, TabletSchedCtx.State.FINISHED, "create replica finished");
+        // 成功创建恢复副本会打印日志
         LOG.info("create replica for recovery successfully, tablet:{} backend:{}", tabletId, task.getBackendId());
     }
 

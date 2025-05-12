@@ -1084,6 +1084,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
     @Override
     public TMasterResult finishTask(TFinishTaskRequest request) throws TException {
+        // 收到完成任务的请求
         return leaderImpl.finishTask(request);
     }
 

@@ -62,12 +62,15 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
+import com.starrocks.leader.LeaderImpl;
 import com.starrocks.persist.ReplicaPersistInfo;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.service.FrontendServiceImpl;
 import com.starrocks.sql.analyzer.Authorizer;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.system.Backend;
 import com.starrocks.system.SystemInfoService;
+import com.starrocks.task.AgentTask;
 import com.starrocks.task.AgentTaskQueue;
 import com.starrocks.task.CloneTask;
 import com.starrocks.task.CreateReplicaTask;
@@ -987,7 +990,14 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         return timeoutMs;
     }
 
-    /*
+    /**
+     * clone副本的调用栈：
+     * @see FrontendServiceImpl#finishTask(TFinishTaskRequest) FrontendService收到Be调用thrift接口
+     * @see LeaderImpl#finishTask(TFinishTaskRequest) 处理收到完成任务的请求
+     * @see LeaderImpl#finishClone(AgentTask, TFinishTaskRequest) 处理finishClone
+     * @see TabletScheduler#finishCloneTask(CloneTask, TFinishTaskRequest) 调用TabletScheduler的finishCloneTask方法
+     * @see TabletSchedCtx#finishCloneTask(CloneTask, TFinishTaskRequest) 调用TabletSchedCtx的finishCloneTask方法
+     *
      * 1. Check if the tablet is already healthy. If yes, ignore the clone task report, and take it as FINISHED.
      * 2. If not, check the reported clone replica, and try to make it effective.
      *

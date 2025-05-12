@@ -284,6 +284,7 @@ public class LeaderImpl {
         }
 
         try {
+            // 这么多任务类型
             switch (taskType) {
                 case CREATE:
                     Preconditions.checkState(request.isSetReport_version());

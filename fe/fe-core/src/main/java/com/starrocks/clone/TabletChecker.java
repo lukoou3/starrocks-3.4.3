@@ -353,8 +353,10 @@ public class TabletChecker extends FrontendDaemon {
                             continue;
                         }
 
+                        // 检查分区tablets健康状态
                         TabletCheckerStat partitionTabletCheckerStat = doCheckOnePartition(db, olapTbl, physicalPartition,
                                 replicaNum, aliveBeIdsInCluster, isPartitionUrgent);
+                        // 累加
                         totStat.accumulateStat(partitionTabletCheckerStat);
 
                         if (totStat.isUrgentPartitionHealthy && isPartitionUrgent) {
@@ -381,6 +383,7 @@ public class TabletChecker extends FrontendDaemon {
         stat.counterUnhealthyTabletNum.addAndGet(totStat.unhealthyTabletNum);
         stat.counterTabletAddToBeScheduled.addAndGet(totStat.addToSchedulerTabletNum);
 
+        // 打印检查结果
         LOG.info("finished to check tablets. isUrgent: {}, " +
                         "unhealthy/total/added/in_sched/not_ready: {}/{}/{}/{}/{}, " +
                         "cost: {} ms, in lock time: {} ms, wait time: {}ms",
@@ -426,6 +429,7 @@ public class TabletChecker extends FrontendDaemon {
                     }
 
                     SystemInfoService systemInfoService = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
+                    // 获取tablet健康状态
                     Pair<TabletHealthStatus, TabletSchedCtx.Priority> statusWithPrio =
                             TabletChecker.getTabletHealthStatusWithPriority(
                                     localTablet,
@@ -435,6 +439,7 @@ public class TabletChecker extends FrontendDaemon {
                                     aliveBeIdsInCluster,
                                     olapTbl.getLocation());
 
+                    // 健康
                     if (statusWithPrio.first == TabletHealthStatus.HEALTHY) {
                         // Only set last status check time when status is healthy.
                         localTablet.setLastStatusCheckTime(System.currentTimeMillis());
@@ -444,6 +449,7 @@ public class TabletChecker extends FrontendDaemon {
                         partitionTabletCheckerStat.isUrgentPartitionHealthy = false;
                     }
 
+                    // 不健康
                     partitionTabletCheckerStat.unhealthyTabletNum++;
 
                     if (!localTablet.readyToBeRepaired(statusWithPrio.first, statusWithPrio.second)) {
@@ -471,6 +477,7 @@ public class TabletChecker extends FrontendDaemon {
                         continue;
                     }
 
+                    // 提交tablet修复任务到TabletScheduler
                     Pair<Boolean, Long> result =
                             tabletScheduler.blockingAddTabletCtxToScheduler(db, tabletSchedCtx,
                                     isPartitionUrgent);
@@ -1010,6 +1017,16 @@ public class TabletChecker extends FrontendDaemon {
     }
 
     /**
+     * 副本被认为是健康（healthy）的条件：
+     * 1. 后端（backend）节点可用。
+     * 2. 磁盘未被标记为退役（decommissioned）。
+     * 3. 副本状态正常，例如未处于 BAD 状态。
+     * 4. 副本版本已追赶上（caught up），且最后失败的版本为 -1。
+     *
+     * Tablet 被认为是健康（healthy）的条件：
+     * 1. 健康副本的数量等于复制数（replicationNum）。
+     * 2. 所有健康副本都位于正确的存储位置（如果指定了位置要求）。
+     *
      * A replica is healthy only if
      * 1. the backend is available
      * 2. the disk is not decommissioned
@@ -1030,6 +1047,42 @@ public class TabletChecker extends FrontendDaemon {
         LocalTabletHealthStats stats = collectLocalTabletHealthStats(localTablet, systemInfoService,
                 visibleVersion, requiredLocation);
 
+        /**
+         * 处理不同不健康情况的优先级顺序为：
+         * FORCE_REDUNDANT > REPLICA_MISSING > VERSION_INCOMPLETE >
+         * REPLICA_RELOCATING > DISK_MIGRATION > LOCATION_MISMATCH > REDUNDANT。
+         * 计数也应根据此优先级进行。
+         * 处理较低优先级的情况意味着较高优先级的情况不存在，我们无需关注它们。
+         * FORCE_REDUNDANT 优先级最高的原因是，在某些情况下，我们需要先删除一些副本，
+         * 以便克隆新的副本。
+         *
+         * 1. 存活副本不足
+         * 如果存活副本不足，则调用 getStatusWhenNotEnoughAliveReplicas 方法判断状态。
+         * 如果返回结果非空，则返回该结果。
+         *
+         * 2. 版本完整的副本不足
+         * 如果版本完整的副本不足，则调用 getStatusWhenNotEnoughVerCompleteReplicas 方法判断状态。
+         * 如果返回结果非空，则返回该结果。
+         *
+         * 3. 副本正在迁移
+         * 如果副本涉及后端退役，则调用 getStatusWhenBackendDecommissioned 方法判断状态。
+         * 如果返回结果非空，则返回该结果。
+         *
+         * 4. 磁盘退役
+         * 如果磁盘稳定的副本数量少于复制数，则返回状态为 DISK_MIGRATION，优先级为 NORMAL。
+         *
+         * 5. 副本冗余
+         * 如果副本数量超过复制数，则返回状态为 REDUNDANT，优先级为 VERY_HIGH，
+         * 因为删除冗余副本可以快速释放空间。
+         *
+         * 6. 副本位置与表的位置要求不匹配
+         * 该情况应在 REDUNDANT 之后处理，因为如果无法找到足够匹配位置的后端，
+         * 冗余副本的删除将持续受阻。
+         * 如果位置匹配的副本数量少于复制数，则返回状态为 LOCATION_MISMATCH，优先级为 NORMAL。
+         *
+         * 7. 健康
+         * 如果以上情况均不满足，则返回状态为 HEALTHY，优先级为 NORMAL。
+         */
         // The priority of handling different unhealthy situations should be:
         // FORCE_REDUNDANT > REPLICA_MISSING > VERSION_INCOMPLETE >
         // REPLICA_RELOCATING > DISK_MIGRATION > LOCATION_MISMATCH > REDUNDANT.
