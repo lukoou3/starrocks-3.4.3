@@ -225,6 +225,10 @@ public class BDBEnvironment {
         environmentConfig.setTransactional(true);
         environmentConfig.setAllowCreate(true);
         environmentConfig.setCachePercent(MEMORY_CACHE_PERCENT);
+        /**
+         * 默认bdbje_lock_timeout_second = 1
+         * BDB JE 操作的锁超时时间，可以看到这个时间还是比较短的，所以对io的要求比较高
+         */
         environmentConfig.setLockTimeout(Config.bdbje_lock_timeout_second, TimeUnit.SECONDS);
         environmentConfig.setConfigParam(EnvironmentConfig.FILE_LOGGING_LEVEL, Config.bdbje_log_level);
         environmentConfig.setConfigParam(EnvironmentConfig.CLEANER_THREADS,
@@ -233,6 +237,14 @@ public class BDBEnvironment {
                 String.valueOf(Config.bdbje_reserved_disk_size));
 
         if (isElectable) {
+            /**
+             * master_sync_policy: FE 所在 StarRocks 集群中，Leader FE 上的日志刷盘方式。该参数仅在当前 FE 为 Leader 时有效。
+             * replica_sync_policy: FE 所在 StarRocks 集群中，Follower FE 上的日志刷盘方式。
+             *   SYNC：事务提交时同步写日志并刷盘。
+             *   NO_SYNC：事务提交时不同步写日志。
+             *   WRITE_NO_SYNC：事务提交时同步写日志，但是不刷盘。
+             * 如果您只部署了一个 Follower FE，建议将其设置为 SYNC。 如果您部署了 3 个及以上 Follower FE，建议将master_sync_policy和 replica_sync_policy 均设置为 WRITE_NO_SYNC。
+             */
             Durability durability = new Durability(getSyncPolicy(Config.master_sync_policy),
                     getSyncPolicy(Config.replica_sync_policy), getAckPolicy(Config.replica_ack_policy));
             environmentConfig.setDurability(durability);

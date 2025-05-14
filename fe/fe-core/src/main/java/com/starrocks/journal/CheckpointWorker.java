@@ -47,6 +47,10 @@ public abstract class CheckpointWorker extends FrontendDaemon {
     private String subDir;
 
     public CheckpointWorker(String name, Journal journal, String subDir) {
+        /**
+         * Checkpoint的执行间隔
+         * public static int checkpoint_interval_second = 60; // 1 minutes
+         */
         super(name, FeConstants.checkpoint_interval_second * 1000L);
         this.journal = journal;
         this.subDir = subDir;

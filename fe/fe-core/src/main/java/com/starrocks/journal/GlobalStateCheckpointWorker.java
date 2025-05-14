@@ -25,6 +25,7 @@ public class GlobalStateCheckpointWorker extends CheckpointWorker {
         super("global_state_checkpoint_worker", journal, "");
     }
 
+    // 做Checkpoint
     @Override
     void doCheckpoint(long epoch, long journalId) throws Exception {
         long replayedJournalId = -1;
@@ -32,9 +33,9 @@ public class GlobalStateCheckpointWorker extends CheckpointWorker {
         LOG.info("begin to generate new image: image.{}", journalId);
         GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
         globalStateMgr.setEditLog(new EditLog(null));
-        globalStateMgr.setJournal(journal);
+        globalStateMgr.setJournal(journal); // 也是和journal相关的
         try {
-            globalStateMgr.loadImage(imageDir);
+            globalStateMgr.loadImage(imageDir); // imageDir 镜像文件的目录就是fe配置的meta/image目录
             globalStateMgr.initDefaultWarehouse();
 
             checkEpoch(epoch);
