@@ -142,6 +142,12 @@ public class PartitionInfo extends JsonWriter implements Cloneable, GsonPreProce
         idToDataProperty.put(partitionId, newDataProperty);
     }
 
+    /**
+     * 获取write_quorum对应需要写入的副本数
+     *   ALL：副本数replica_num
+     *   ONE：1
+     *   MAJORITY： (replica_num / 2) + 1, 1 => 1, 2 => 2, 3 => 2
+     */
     public int getQuorumNum(long partitionId, TWriteQuorumType writeQuorum) {
         if (writeQuorum == TWriteQuorumType.ALL) {
             return getReplicationNum(partitionId);

@@ -178,6 +178,12 @@ public class OlapTableTxnStateListener implements TransactionStateListener {
             }
 
             List<MaterializedIndex> allIndices = txnState.getPartitionLoadedTblIndexes(table.getId(), partition);
+            /**
+             * 获取write_quorum对应需要写入的副本数
+             *   ALL：副本数replica_num
+             *   ONE：1
+             *   MAJORITY： (replica_num / 2) + 1, 1 => 1, 2 => 2, 3 => 2
+             */
             int quorumReplicaNum = table.getPartitionInfo().getQuorumNum(partition.getParentId(), table.writeQuorum());
             for (MaterializedIndex index : allIndices) {
                 for (Tablet tablet : index.getTablets()) {
@@ -233,7 +239,17 @@ public class OlapTableTxnStateListener implements TransactionStateListener {
                         }
                     }
 
+                    // 检查成功副本数
                     if (successReplicaNum < quorumReplicaNum) {
+                        /**
+                         * 两个副本时，默认写入偶现的报错：Commit failed. txn: 755640 table: object_statistics tablet: 862885 quorum: 1<2 errorReplicas: 862887:{be:10008 192.168.2.69 st:NORMAL V:4 LFV:5},862888:{be:10010 192.168.2.71 st:NORMAL V:1 LFV:2}, commitBackends: [10020, 10008, 10010]
+                         * 可以设置表属性使写入一个副本成功就算成功：ALTER TABLE object_statistics SET ("write_quorum" = "ONE");
+                         * 官网导入数据安全等级（Write quorum）：https://docs.starrocks.io/zh/docs/administration/management/resource_management/Replica/#%E5%AF%BC%E5%85%A5%E6%95%B0%E6%8D%AE%E5%AE%89%E5%85%A8%E7%AD%89%E7%BA%A7write-quorum
+                         * write_quorum 的取值及其对应描述如下：
+                         *   MAJORITY：默认值。当多数数据副本导入成功时，StarRocks 返回导入成功，否则返回失败。
+                         *   ONE：当一个数据副本导入成功时，StarRocks 返回导入成功，否则返回失败。
+                         *   ALL：当所有数据副本导入成功时，StarRocks 返回导入成功，否则返回失败。
+                         */
                         String msg = String.format(
                                 "Commit failed. txn: %d table: %s tablet: %d quorum: %d<%d errorReplicas: %s commitBackends: %s",
                                 txnState.getTransactionId(), table.getName(), tablet.getId(), successReplicaNum,
