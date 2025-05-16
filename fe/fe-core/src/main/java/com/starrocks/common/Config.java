@@ -102,6 +102,8 @@ public class Config extends ConfigBase {
     public static String sys_log_roll_mode = "SIZE-MB-1024";
     @ConfField
     public static boolean sys_log_enable_compress = false;
+
+    // 可以配置哪些模块的WARN级别日志
     @ConfField
     public static String[] sys_log_warn_modules = {};
     /**
@@ -190,6 +192,7 @@ public class Config extends ConfigBase {
     public static String internal_log_dir = StarRocksFE.STARROCKS_HOME_DIR + "/log";
     @ConfField
     public static int internal_log_roll_num = 90;
+    // 这个可以配置其它的日志吗
     @ConfField
     public static String[] internal_log_modules = {"base", "statistic"};
     @ConfField
@@ -357,6 +360,7 @@ public class Config extends ConfigBase {
     public static int label_keep_max_num = 1000;
 
     /**
+     * 这个是什么，似乎是clean old task
      * StreamLoadTasks hold by StreamLoadMgr will be cleaned
      */
     @ConfField(mutable = true)
@@ -431,6 +435,10 @@ public class Config extends ConfigBase {
 
     // Configurations for meta data durability
     /**
+     * StarRocks元数据将保存在此处。
+     * 强烈建议将此目录存储为：
+     *   1。高写入性能（SSD）
+     *   2。安全（RAID）
      * StarRocks metadata will be saved here.
      * The storage of this dir is highly recommended as to be:
      * 1. High write performance (SSD)
@@ -495,6 +503,9 @@ public class Config extends ConfigBase {
     public static int meta_delay_toleration_second = 300;    // 5 min
 
     /**
+     * dbje的Leader FE同步策略。
+     * 如果您只部署了一个Follower FE，请将其设置为“sync”。如果部署了3个以上的Follower FE，则可以将此和以下“replica_sync_policy”设置为WRITE_NO_sync。
+     * 更多信息，请参阅：<a href="http://docs.oracle.com/cd/E17277_02/html/java/com/sleepycat/je/Durability.SyncPolicy.html">SyncPolicy</a>
      * Leader FE sync policy of bdbje.
      * If you only deploy one Follower FE, set this to 'SYNC'. If you deploy more than 3 Follower FE,
      * you can set this and the following 'replica_sync_policy' to WRITE_NO_SYNC.
@@ -534,6 +545,8 @@ public class Config extends ConfigBase {
     public static int bdbje_replica_ack_timeout_second = 10;
 
     /**
+     * bdbje操作的锁定超时
+     * 如果FE WARN日志中有许多LockTimeoutException，您可以尝试增加此值
      * The lock timeout of bdbje operation
      * If there are many LockTimeoutException in FE WARN log, you can try to increase this value
      */
@@ -541,6 +554,7 @@ public class Config extends ConfigBase {
     public static int bdbje_lock_timeout_second = 1;
 
     /**
+     * 设置非leader FE与leader FE主机之间可接受的最大时钟偏差。每当非领导者FE通过BDBJE与领导者FE建立连接时，都会检查此值。如果时钟偏差大于此值，则放弃连接。
      * Set the maximum acceptable clock skew between non-leader FE to Leader FE host.
      * This value is checked whenever a non-leader FE establishes a connection to leader FE via BDBJE.
      * The connection is abandoned if the clock skew is larger than this value.
@@ -1132,6 +1146,9 @@ public class Config extends ConfigBase {
     public static int desired_max_waiting_jobs = 1024;
 
     /**
+     * 在单个数据库txn管理器下，包括准备、提交txns在内的最大并发运行txn num将拒绝即将到来的txn
+     * StarRocks 集群每个数据库中正在运行的导入相关事务的最大个数，默认值为 1000。自 3.1 版本起，默认值由 100 变为 1000。当数据库中正在运行的导入相关事务超过最大个数限制时，后续的导入不会执行。如果是同步的导入作业请求，作业会被拒绝；如果是异步的导入作业请求，作业会在队列中等待。不建议调大该值，会增加系统负载。
+     *
      * maximum concurrent running txn num including prepare, commit txns under a single db
      * txn manager will reject coming txns
      */
