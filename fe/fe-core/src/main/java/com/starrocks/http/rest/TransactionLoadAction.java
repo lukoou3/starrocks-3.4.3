@@ -290,11 +290,13 @@ public class TransactionLoadAction extends RestBaseAction {
 
     private Long getNodeId(TransactionOperation txnOperation, String label, String warehouseName) throws UserException {
         Long nodeId;
+        // 在开始事务时保存label->BE的哈希映射，这样后续操作可以发送到同一个BE节点
         // save label->be hashmap when begin transaction, so that subsequent operator can send to same BE
         if (TXN_BEGIN.equals(txnOperation)) {
             List<Long> nodeIds = LoadAction.selectNodes(warehouseName);
             Long chosenNodeId = nodeIds.get(0);
             nodeId = chosenNodeId;
+            // txnNodeMap是LRU缓存，它会自动移除未使用的条目
             // txnNodeMap is LRU cache, it atomic remove unused entry
             accessTxnNodeMapWithWriteLock(txnNodeMap -> txnNodeMap.put(label, chosenNodeId));
         } else {
