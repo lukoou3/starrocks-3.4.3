@@ -63,6 +63,7 @@ import com.starrocks.rpc.RpcException;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.WarehouseManager;
 import com.starrocks.service.FrontendOptions;
+import com.starrocks.service.FrontendServiceImpl;
 import com.starrocks.sql.analyzer.AstToSQLBuilder;
 import com.starrocks.sql.ast.AstTraverser;
 import com.starrocks.sql.ast.DmlStmt;
@@ -85,6 +86,8 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.thrift.ProcessFunction;
+import org.apache.thrift.protocol.TProtocol;
 import org.xnio.conduits.ConduitStreamSourceChannel;
 
 import java.io.IOException;
@@ -102,6 +105,19 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
+ * 执行ddl语句时，连接LEADER和FOLLOWER节点，最终都是在LEADER节点上执行，这两种方式的调用栈：
+ * 连接LEADER执行：
+ *   @see ReadListener#handleEvent(ConduitStreamSourceChannel)
+ *   @see ConnectProcessor#processOnce() 处理sql命令
+ *   ...
+ * 连接FOLLOWER执行：
+ *   @see org.apache.thrift.ProcessFunction#process(int, TProtocol, TProtocol, Object)
+ *   @see FrontendServiceImpl#forward(TMasterOpRequest)
+ *   @see ConnectProcessor#proxyExecute(TMasterOpRequest)
+ *   ...
+ * 可以看到连接FOLLOWER执行ddl，会调用LEADER的rpc接口(thrift服务)
+ *
+ * 处理一个mysql连接，接收一个包，处理，发送一个包。
  * Process one mysql connection, receive one pakcet, process, send one packet.
  */
 public class ConnectProcessor {

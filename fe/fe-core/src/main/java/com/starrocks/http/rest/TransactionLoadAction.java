@@ -117,6 +117,7 @@ public class TransactionLoadAction extends RestBaseAction {
     private final Map<String, Long> txnNodeMap = new LinkedHashMap<>(512, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+            // txn最多存储计算(节点 * 512)个label
             return size() > (GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getTotalBackendNumber() +
                     GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getTotalComputeNodeNumber()) * 512;
         }

@@ -175,6 +175,7 @@ import com.starrocks.persist.metablock.SRMetaBlockID;
 import com.starrocks.persist.metablock.SRMetaBlockReader;
 import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.DDLStmtExecutor;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.scheduler.Constants;
 import com.starrocks.scheduler.ExecuteOption;
@@ -184,47 +185,7 @@ import com.starrocks.scheduler.TaskManager;
 import com.starrocks.scheduler.TaskRun;
 import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.sql.analyzer.Authorizer;
-import com.starrocks.sql.ast.AddPartitionClause;
-import com.starrocks.sql.ast.AdminCheckTabletsStmt;
-import com.starrocks.sql.ast.AdminSetPartitionVersionStmt;
-import com.starrocks.sql.ast.AdminSetReplicaStatusStmt;
-import com.starrocks.sql.ast.AlterDatabaseQuotaStmt;
-import com.starrocks.sql.ast.AlterDatabaseRenameStatement;
-import com.starrocks.sql.ast.AlterMaterializedViewStmt;
-import com.starrocks.sql.ast.AlterTableCommentClause;
-import com.starrocks.sql.ast.AlterTableStmt;
-import com.starrocks.sql.ast.AlterViewStmt;
-import com.starrocks.sql.ast.AsyncRefreshSchemeDesc;
-import com.starrocks.sql.ast.CancelAlterTableStmt;
-import com.starrocks.sql.ast.CancelRefreshMaterializedViewStmt;
-import com.starrocks.sql.ast.ColumnRenameClause;
-import com.starrocks.sql.ast.CreateMaterializedViewStatement;
-import com.starrocks.sql.ast.CreateMaterializedViewStmt;
-import com.starrocks.sql.ast.CreateTableLikeStmt;
-import com.starrocks.sql.ast.CreateTableStmt;
-import com.starrocks.sql.ast.CreateTemporaryTableStmt;
-import com.starrocks.sql.ast.CreateViewStmt;
-import com.starrocks.sql.ast.DistributionDesc;
-import com.starrocks.sql.ast.DropMaterializedViewStmt;
-import com.starrocks.sql.ast.DropPartitionClause;
-import com.starrocks.sql.ast.DropTableStmt;
-import com.starrocks.sql.ast.ExpressionPartitionDesc;
-import com.starrocks.sql.ast.IntervalLiteral;
-import com.starrocks.sql.ast.PartitionDesc;
-import com.starrocks.sql.ast.PartitionRangeDesc;
-import com.starrocks.sql.ast.PartitionRenameClause;
-import com.starrocks.sql.ast.RecoverDbStmt;
-import com.starrocks.sql.ast.RecoverPartitionStmt;
-import com.starrocks.sql.ast.RecoverTableStmt;
-import com.starrocks.sql.ast.RefreshMaterializedViewStatement;
-import com.starrocks.sql.ast.RefreshSchemeClause;
-import com.starrocks.sql.ast.ReplacePartitionClause;
-import com.starrocks.sql.ast.RollupRenameClause;
-import com.starrocks.sql.ast.ShowAlterStmt;
-import com.starrocks.sql.ast.SingleRangePartitionDesc;
-import com.starrocks.sql.ast.SystemVariable;
-import com.starrocks.sql.ast.TableRenameClause;
-import com.starrocks.sql.ast.TruncateTableStmt;
+import com.starrocks.sql.ast.*;
 import com.starrocks.sql.common.MetaUtils;
 import com.starrocks.sql.common.PListCell;
 import com.starrocks.sql.common.SyncPartitionUtils;
@@ -1870,6 +1831,21 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         table.setStorageInfo(pathInfo, dataCacheInfo);
     }
 
+    /**
+     * OlapTable表创建的流程：
+     * @see com.starrocks.qe.StmtExecutor#execute() 收到请求，执行statement
+     * @see com.starrocks.qe.StmtExecutor#handleDdlStmt() statement属于DdlStmt，处理DdlStmt
+     * @see DDLStmtExecutor#execute(StatementBase, ConnectContext) 执行DdlStmt
+     * @see DDLStmtExecutor.StmtExecutorVisitor#visitCreateTableStatement(CreateTableStmt, ConnectContext) visit模式，执行创建表Statement
+     * @see MetadataMgr#createTable(CreateTableStmt) MetadataMgr执行创建表操作
+     * @see LocalMetastore#createTable(CreateTableStmt) 创建表
+     * @see OlapTableFactory#createTable(LocalMetastore, Database, CreateTableStmt) 创建Table，返回Table对象
+     * @see LocalMetastore#onCreate(Database, Table, String, boolean) 创建Table后执行一些操作，加入db中，写入EditLog元数据
+     * @see Database#registerTableUnlocked(Table) 把table注册到db中
+     * @see EditLog#logCreateTable(CreateTableInfo) CreateTableInfo写入EditLog
+     * @see OlapTable#onCreate(Database) 回调操作
+     *
+     */
     public void onCreate(Database db, Table table, String storageVolumeId, boolean isSetIfNotExists)
             throws DdlException {
         // check database exists again, because database can be dropped when creating table
@@ -1913,25 +1889,32 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
                 throw new DdlException("Database has been dropped when creating table/mv/view");
             }
 
+            /**
+             * 把table注册到db中，如果已经存在表返回false
+             */
             if (!db.registerTableUnlocked(table)) {
                 if (!isSetIfNotExists) {
                     table.delete(db.getId(), false);
                     ErrorReport.reportDdlException(ErrorCode.ERR_CANT_CREATE_TABLE, table.getName(),
                             "table already exists");
                 } else {
+                    // 创建语句包含if not exists，忽略
                     LOG.info("Create table[{}] which already exists", table.getName());
                     return;
                 }
             }
 
+            // 表已添加到数据库中，以下过程不能引发异常。
             // NOTE: The table has been added to the database, and the following procedure cannot throw exception.
             LOG.info("Successfully create table: {}-{}, in database: {}-{}",
                     table.getName(), table.getId(), db.getFullName(), db.getId());
 
             CreateTableInfo createTableInfo = new CreateTableInfo(db.getFullName(), table, storageVolumeId);
+            // 把createTableInfo写入editlog，持久化
             GlobalStateMgr.getCurrentState().getEditLog().logCreateTable(createTableInfo);
             table.onCreate(db);
         } catch (SerializeException e) {
+            // 创建表异常， 从bb中删除table
             db.unRegisterTableUnlocked(table);
             LOG.warn("create table failed", e);
             ErrorReport.reportDdlException(ErrorCode.ERR_CANT_CREATE_TABLE, table.getName(), e.getMessage());

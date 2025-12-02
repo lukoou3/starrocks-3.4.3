@@ -465,7 +465,7 @@ CONF_mInt64(streaming_load_max_batch_size_mb, "100");
 CONF_Int32(streaming_load_rpc_max_alive_time_sec, "1200");
 // The timeout of a rpc to open the tablet writer in remote BE.
 // actual timeout is min(tablet_writer_open_rpc_timeout_sec, load_timeout_sec / 2)
-CONF_mInt32(tablet_writer_open_rpc_timeout_sec, "300");
+CONF_mInt32(tablet_writer_open_rpc_timeout_sec, "300"); // 这个可能是status code: INTERNAL_ERROR, error message: [E1008]Reached timeout=300000ms @10.111.137.33:8060
 // make_snapshot rpc timeout
 CONF_Int32(make_snapshot_rpc_timeout_ms, "20000");
 // Deprecated, use query_timeout instread
